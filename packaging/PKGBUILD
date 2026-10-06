@@ -12,12 +12,12 @@ makedepends=('cargo' 'npm')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
-# The bundled frontend is produced by Vite, the desktop binary by Cargo.
-export npm_config_cache="$srcdir/npm-cache"
-
 prepare() {
   cd "$pkgname-$pkgver"
-  npm ci
+
+  # makepkg has not defined $srcdir while it is still sourcing the top level
+  # of this file, so point npm's cache at it from inside the function.
+  npm_config_cache="$srcdir/npm-cache" npm ci
 }
 
 build() {
