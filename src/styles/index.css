@@ -7,8 +7,8 @@
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono:
-    ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono",
-    monospace;
+    "JetBrainsMono Nerd Font", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo,
+    Consolas, "Liberation Mono", monospace;
 
   /* Every step is 2px larger than the Tailwind default (line-height ratios are
      unitless, so they keep scaling with these sizes). */

@@ -240,6 +240,35 @@ mod tests {
         assert_eq!(entry.issuer, "Example");
     }
 
+    /// Whatever the QR encodes must come back identical when another app
+    /// re-parses it — issuer, account name and secret survive the trip.
+    #[test]
+    fn to_uri_roundtrip_preserves_credential() {
+        let original = parse(
+            "otpauth://totp/Example:user%40example.com?secret=JBSWY3DPEEHS&issuer=Example&algorithm=SHA256&digits=8&period=60",
+            timestamp(),
+        )
+        .unwrap();
+        let reparsed = parse(&to_uri(&original), timestamp()).unwrap();
+        assert_eq!(reparsed.issuer, "Example");
+        assert_eq!(reparsed.account, "user@example.com");
+        assert_eq!(reparsed.secret.as_str(), original.secret.as_str());
+        assert_eq!(reparsed.algorithm, Algorithm::Sha256);
+        assert_eq!(reparsed.digits, 8);
+        assert_eq!(reparsed.period, 60);
+
+        // A label without an account part also survives (it re-parses with
+        // the label as the account name, matching what scanners display).
+        let issuer_only = parse(
+            "otpauth://totp/Google?secret=JBSWY3DPEEHS&issuer=Google",
+            timestamp(),
+        )
+        .unwrap();
+        let reparsed = parse(&to_uri(&issuer_only), timestamp()).unwrap();
+        assert_eq!(reparsed.issuer, "Google");
+        assert_eq!(reparsed.account, "Google");
+    }
+
     #[test]
     fn decodes_percent_escapes() {
         let entry = parse(
