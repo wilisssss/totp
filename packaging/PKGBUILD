@@ -23,6 +23,24 @@ prepare() {
 build() {
   cd "$pkgname-$pkgver"
 
+  # makepkg.conf sets OPTIONS=(lto), which puts -flto=auto into CFLAGS. The cc
+  # crate passes that to GCC, producing slim LTO bitcode objects, but rustc
+  # links with its bundled rust-lld, which only understands LLVM bitcode —
+  # ring then fails with "undefined symbol: ring_core_0_17_14__...". Build the
+  # C/asm sources without LTO; cargo keeps whatever LTO the Rust profile asks.
+  local flag
+  local -a kept=()
+  for flag in $CFLAGS; do
+    [[ $flag == -flto* ]] || kept+=("$flag")
+  done
+  CFLAGS="${kept[*]}"
+  kept=()
+  for flag in $CXXFLAGS; do
+    [[ $flag == -flto* ]] || kept+=("$flag")
+  done
+  CXXFLAGS="${kept[*]}"
+
+  # The bundled frontend is produced by Vite, the desktop binary by Cargo.
   npm run build
   cargo build --release --locked --manifest-path src-tauri/Cargo.toml
 }
