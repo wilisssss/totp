@@ -146,6 +146,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setTick({ now: Date.now(), snapshotAt: snapshotAtRef.current });
 
     let inFlight = false;
+    // If the backend keeps failing, retry at most every few seconds instead
+    // of hammering it on every tick.
+    const RETRY_BACKOFF_MS = 3000;
+    let lastAttempt = 0;
+
     const timer = window.setInterval(() => {
       const now = Date.now();
       setTick({ now, snapshotAt: snapshotAtRef.current });
@@ -158,7 +163,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const rotated = snap.entries.some(
         (entry) => entry.kind === "totp" && elapsed >= entry.remaining,
       );
-      if ((rotated || elapsed >= SAFETY_REFRESH_SECS) && !inFlight) {
+      if (
+        (rotated || elapsed >= SAFETY_REFRESH_SECS) &&
+        !inFlight &&
+        now - lastAttempt >= RETRY_BACKOFF_MS
+      ) {
+        lastAttempt = now;
         inFlight = true;
         void refresh().finally(() => {
           inFlight = false;
@@ -227,11 +237,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setSettings((current) =>
       current ? { ...current, offset_secs: result.offset_secs } : current,
     );
+    // The offset changes every derived code — fetch a fresh snapshot now
+    // instead of waiting for the next safety refresh.
+    await refresh();
     return {
       offsetSecs: result.offset_secs,
       corrected: result.corrected,
     };
-  }, [run]);
+  }, [run, refresh]);
 
   const value = useMemo<VaultContextValue>(
     () => ({

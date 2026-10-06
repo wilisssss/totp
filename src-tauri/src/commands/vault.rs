@@ -10,6 +10,9 @@ use crate::vault::crypto::{self, default_kdf};
 use crate::vault::store::Payload;
 
 /// Minimum passphrase length accepted at creation time.
+///
+/// NOTE: keep the "min. 8 karakter" hints in `SetupScreen.tsx` and
+/// `SettingsModal.tsx` in sync with this constant.
 pub const MIN_PASSPHRASE_LEN: usize = 8;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -18,8 +21,10 @@ pub struct VaultStatus {
     pub locked: bool,
 }
 
-fn validate_passphrase(passphrase: &str) -> AppResult<()> {
-    if passphrase.trim().chars().count() < MIN_PASSPHRASE_LEN {
+/// The sealed passphrase is the untrimmed input, so validate the untrimmed
+/// input too (mismatches here would lock users out of their own vault).
+pub(crate) fn validate_passphrase(passphrase: &str) -> AppResult<()> {
+    if passphrase.chars().count() < MIN_PASSPHRASE_LEN {
         return Err(AppError::InvalidInput(format!(
             "passphrase minimal {MIN_PASSPHRASE_LEN} karakter"
         )));

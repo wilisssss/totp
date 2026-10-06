@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { EntryView } from "../../api/types";
@@ -37,6 +37,7 @@ export function MainScreen() {
   const [modal, setModal] = useState<ModalState>({ type: null });
   const [pendingDelete, setPendingDelete] = useState<EntryView | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const entries = snapshot?.entries ?? [];
   const visible = useMemo(
@@ -45,6 +46,31 @@ export function MainScreen() {
   );
 
   const close = () => setModal({ type: null });
+
+  // Keyboard shortcuts (ignored while a modal is open):
+  // Ctrl+F search, Ctrl+N add, Ctrl+L lock.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (modal.type !== null || pendingDelete) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "f") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      } else if (key === "n") {
+        event.preventDefault();
+        setModal({ type: "add" });
+      } else if (key === "l") {
+        event.preventDefault();
+        void handleLock();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modal.type, pendingDelete, lock, notify]);
 
   const move = async (entry: EntryView, direction: -1 | 1) => {
     const ids = entries.map((item) => item.id);
@@ -120,10 +146,11 @@ export function MainScreen() {
             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
           />
           <input
+            ref={searchRef}
             className="field !py-1.5 !pl-7 !text-xs"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari..."
+            placeholder="Cari... (Ctrl+F)"
             aria-label="Cari akun"
           />
         </div>
@@ -142,7 +169,7 @@ export function MainScreen() {
             type="button"
             className="btn btn-primary btn-icon"
             onClick={() => setModal({ type: "add" })}
-            title="Tambah akun"
+            title="Tambah akun (Ctrl+N)"
             aria-label="Tambah akun"
           >
             <PlusIcon size={15} />
@@ -160,7 +187,7 @@ export function MainScreen() {
             type="button"
             className="btn btn-ghost btn-icon"
             onClick={handleLock}
-            title="Kunci vault"
+            title="Kunci vault (Ctrl+L)"
             aria-label="Kunci vault"
           >
             <LockIcon size={15} />
@@ -204,6 +231,7 @@ export function MainScreen() {
                 key={entry.id}
                 entry={entry}
                 total={entries.length}
+                moveDisabled={query.trim().length > 0}
                 onEdit={(target) => setModal({ type: "edit", entry: target })}
                 onDelete={(target) => setPendingDelete(target)}
                 onShowQr={(target) => setModal({ type: "qr", entry: target })}

@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { api, errorMessage } from "../../api/tauri";
 import type { Algorithm, EntryInput, EntryView, OtpKind } from "../../api/types";
 import { Field, Modal } from "../../components/ui/Modal";
-import { AlertIcon } from "../../components/ui/icons";
+import { FormError } from "../../components/ui/FormError";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
 
@@ -117,12 +117,7 @@ export function EntryFormModal({ entry, onClose }: EntryFormModalProps) {
       }
     >
       <form id="entry-form" onSubmit={submit} className="space-y-4">
-        {error ? (
-          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
-            <AlertIcon size={14} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        ) : null}
+        {error ? <FormError message={error} /> : null}
 
         <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
           <Field label="Layanan" hint="opsional">
@@ -225,13 +220,17 @@ export function EntryFormModal({ entry, onClose }: EntryFormModalProps) {
                 />
               </Field>
             ) : (
-              <Field label="Counter">
+              <Field
+                label="Counter"
+                hint={isEdit ? "tidak dapat diubah saat mengedit" : undefined}
+              >
                 <input
                   className="field"
                   type="number"
                   min={0}
                   value={form.counter}
                   onChange={(event) => update("counter", Number(event.target.value))}
+                  disabled={isEdit}
                 />
               </Field>
             )}

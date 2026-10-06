@@ -53,6 +53,12 @@ fn percent_decode(input: &str, plus_as_space: bool) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Decode percent escapes for callers outside this module (e.g. the Google
+/// Authenticator migration parser). `plus_as_space` is disabled there.
+pub fn percent_decode_public(input: &str) -> String {
+    percent_decode(input, false)
+}
+
 /// Encode a label/value so it is safe inside an `otpauth://` URI.
 fn percent_encode(input: &str) -> String {
     let mut out = String::with_capacity(input.len());

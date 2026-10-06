@@ -82,20 +82,8 @@ impl Store {
         fs::create_dir_all(&self.dir)?;
 
         let tmp = path.with_extension("json.tmp");
-        {
-            let mut options = fs::OpenOptions::new();
-            options.write(true).create(true).truncate(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-
-            let mut file = options.open(&tmp)?;
-            file.write_all(bytes)?;
-            file.sync_all()?;
-        }
-
+        write_private(&tmp, bytes)?;
+        file_sync(&tmp)?;
         fs::rename(&tmp, path)?;
 
         #[cfg(unix)]
@@ -106,6 +94,28 @@ impl Store {
 
         Ok(())
     }
+}
+
+/// Write `bytes` to `path` with owner-only permissions (0600 on unix) so
+/// plaintext secret exports never become world readable.
+pub fn write_private(path: &Path, bytes: &[u8]) -> AppResult<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    Ok(())
+}
+
+fn file_sync(path: &Path) -> AppResult<()> {
+    let file = fs::OpenOptions::new().write(true).open(path)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 #[cfg(test)]

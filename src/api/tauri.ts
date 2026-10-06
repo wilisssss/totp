@@ -75,10 +75,16 @@ export const api = {
   // import / export -----------------------------------------------------
   importText: (text: string) => call<ImportReport>("import_text", { text }),
   importQrFromPath: (path: string) => call<ImportReport>("import_qr_from_path", { path }),
-  importQrBytes: (bytes: Uint8Array) =>
-    call<ImportReport>("import_qr_bytes", { bytes: Array.from(bytes) }),
+  /** Base64 (no data URL prefix) of a QR image. */
+  importQrBytes: (bytesBase64: string) =>
+    call<ImportReport>("import_qr_bytes", { bytesBase64 }),
   exportText: () => call<string>("export_text"),
   exportBackup: () => call<string | null>("export_backup"),
+  /** Passphrase-sealed backup: same envelope as the vault file. */
+  exportEncryptedBackup: (passphrase: string) =>
+    call<string | null>("backup_export_encrypted", { passphrase }),
+  importEncryptedBackup: (passphrase: string) =>
+    call<ImportReport | null>("backup_import_encrypted", { passphrase }),
 
   // settings ------------------------------------------------------------
   getSettings: () => call<Settings>("settings_get"),

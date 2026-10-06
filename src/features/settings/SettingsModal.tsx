@@ -1,18 +1,21 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { Settings, Theme } from "../../api/types";
 import { copyText } from "../../lib/clipboard";
 import { formatDuration } from "../../lib/format";
 import { Field, Modal } from "../../components/ui/Modal";
+import { FormError } from "../../components/ui/FormError";
 import {
-  AlertIcon,
   ClockIcon,
   CopyIcon,
   DownloadIcon,
+  EyeIcon,
   KeyIcon,
   RefreshIcon,
+  RestoreIcon,
+  TrayIcon,
 } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
@@ -20,7 +23,7 @@ import { useVault } from "../vault/VaultProvider";
 const AUTOLOCK_CHOICES = [0, 60, 300, 900, 3600];
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, saveSettings, syncClock, changePassphrase, busy } = useVault();
+  const { settings, saveSettings, syncClock, changePassphrase, refresh, busy } = useVault();
   const notify = useToast();
 
   const [changingPassphrase, setChangingPassphrase] = useState(false);
@@ -29,6 +32,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+
+  // Encrypted backup form: "export" or "import", hidden when "none".
+  const [encMode, setEncMode] = useState<"none" | "export" | "import">("none");
+  const [encPassphrase, setEncPassphrase] = useState("");
+  const [encConfirm, setEncConfirm] = useState("");
 
   if (!settings) return null;
 
@@ -62,6 +70,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     event.preventDefault();
     setError(null);
 
+    // Keep in sync with MIN_PASSPHRASE_LEN in src-tauri/src/commands/vault.rs.
     if (newPassphrase.length < 8) {
       setError("Passphrase baru minimal 8 karakter");
       return;
@@ -105,6 +114,52 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const showEncryptedForm = (mode: "export" | "import") => {
+    setEncMode(mode);
+    setEncPassphrase("");
+    setEncConfirm("");
+    setError(null);
+  };
+
+  const resetEncryptedForm = () => {
+    setEncMode("none");
+    setEncPassphrase("");
+    setEncConfirm("");
+    setError(null);
+  };
+
+  const handleEncryptedBackup = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+
+    // Keep in sync with MIN_PASSPHRASE_LEN in src-tauri/src/commands/vault.rs.
+    if (encPassphrase.length < 8) {
+      setError("Passphrase minimal 8 karakter");
+      return;
+    }
+    if (encMode === "export" && encPassphrase !== encConfirm) {
+      setError("Konfirmasi passphrase tidak sama");
+      return;
+    }
+
+    try {
+      if (encMode === "export") {
+        const path = await api.exportEncryptedBackup(encPassphrase);
+        resetEncryptedForm();
+        if (path) notify("Backup terenkripsi tersimpan", "success");
+      } else {
+        const report = await api.importEncryptedBackup(encPassphrase);
+        resetEncryptedForm();
+        if (report) {
+          await refresh();
+          notify(`${report.imported} entri dipulihkan`, "success");
+        }
+      }
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  };
+
   return (
     <Modal title="Pengaturan" onClose={onClose} wide>
       <div className="space-y-5">
@@ -124,6 +179,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <option value="dark">Gelap</option>
             </select>
           </Field>
+
+          <SettingToggle
+            icon={<EyeIcon size={14} />}
+            label="Sembunyikan kode"
+            hint="Kode diburamkan sampai kartunya diklik"
+            checked={settings.hide_codes}
+            onChange={(value) => void updateSetting("hide_codes", value)}
+          />
         </section>
 
         <section className="space-y-3">
@@ -149,6 +212,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               ))}
             </select>
           </Field>
+
+          <SettingToggle
+            icon={<TrayIcon size={14} />}
+            label="Tutup ke system tray"
+            hint="Tombol tutup menyembunyikan jendela, tidak keluar"
+            checked={settings.close_to_tray}
+            onChange={(value) => void updateSetting("close_to_tray", value)}
+          />
 
           {!changingPassphrase ? (
             <button
@@ -241,32 +312,118 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
             Cadangan
           </h3>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-ghost" onClick={handleCopyAll}>
-              <CopyIcon size={14} /> Salin semua URI
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={handleBackup}
-              disabled={busy}
+
+          {encMode === "none" ? (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn btn-ghost" onClick={handleCopyAll}>
+                <CopyIcon size={14} /> Salin semua URI
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={handleBackup}
+                disabled={busy}
+              >
+                <DownloadIcon size={14} /> Simpan file backup
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => showEncryptedForm("export")}
+              >
+                <DownloadIcon size={14} /> Backup terenkripsi
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => showEncryptedForm("import")}
+              >
+                <RestoreIcon size={14} /> Pulihkan backup
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleEncryptedBackup}
+              className="space-y-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
             >
-              <DownloadIcon size={14} /> Simpan file backup
-            </button>
-          </div>
+              <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                {encMode === "export"
+                  ? "Semua entri akan disegel dengan passphrase ini (Argon2id + AES-256-GCM, format sama dengan vault). Lupa passphrase = backup tak terbaca."
+                  : "Masukkan passphrase backup, lalu pilih filenya. Entri digabungkan; yang sudah ada dilewati."}
+              </p>
+
+              <Field label="Passphrase backup" hint="min. 8 karakter">
+                <input
+                  className="field"
+                  type="password"
+                  value={encPassphrase}
+                  onChange={(event) => setEncPassphrase(event.target.value)}
+                  autoFocus
+                />
+              </Field>
+
+              {encMode === "export" ? (
+                <Field label="Ulangi passphrase">
+                  <input
+                    className="field"
+                    type="password"
+                    value={encConfirm}
+                    onChange={(event) => setEncConfirm(event.target.value)}
+                  />
+                </Field>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn btn-ghost" onClick={resetEncryptedForm}>
+                  Batal
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {busy
+                    ? "Memproses..."
+                    : encMode === "export"
+                      ? "Simpan backup"
+                      : "Pilih file & pulihkan"}
+                </button>
+              </div>
+            </form>
+          )}
+
           <p className="text-[13px] leading-relaxed text-zinc-400 dark:text-zinc-500">
             Backup berupa teks berisi secret setiap akun dalam bentuk{" "}
             <span className="font-mono">otpauth://</span>. Simpan di tempat aman.
           </p>
         </section>
 
-        {error ? (
-          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
-            <AlertIcon size={14} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        ) : null}
+        {error ? <FormError message={error} /> : null}
       </div>
     </Modal>
+  );
+}
+
+interface SettingToggleProps {
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}
+
+function SettingToggle({ icon, label, hint, checked, onChange }: SettingToggleProps) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2.5 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700">
+      <span className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+        {icon}
+        <span>
+          {label}
+          <span className="block text-[13px] text-zinc-400 dark:text-zinc-500">{hint}</span>
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        className="h-4 w-4 shrink-0 accent-indigo-600"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    </label>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { EntryView } from "../../api/types";
@@ -28,6 +28,8 @@ import { useTick, useVault } from "../vault/VaultProvider";
 interface EntryCardProps {
   entry: EntryView;
   total: number;
+  /** Reordering is confusing while a search filter hides entries. */
+  moveDisabled?: boolean;
   onEdit: (entry: EntryView) => void;
   onDelete: (entry: EntryView) => void;
   onShowQr: (entry: EntryView) => void;
@@ -37,16 +39,23 @@ interface EntryCardProps {
 export function EntryCard({
   entry,
   total,
+  moveDisabled = false,
   onEdit,
   onDelete,
   onShowQr,
   onMove,
 }: EntryCardProps) {
   const notify = useToast();
-  const { refresh } = useVault();
+  const { refresh, settings } = useVault();
   const { now, snapshotAt } = useTick();
 
   const [copied, setCopied] = useState(false);
+  const [working, setWorking] = useState(false);
+  const hideCodes = settings?.hide_codes ?? false;
+  const [revealed, setRevealed] = useState(false);
+
+  // Rotated codes come back blurred when privacy mode is on.
+  useEffect(() => setRevealed(false), [entry.code]);
 
   const isTotp = entry.kind === "totp";
   // Derive the countdown locally from the snapshot's age instead of waiting
@@ -61,6 +70,7 @@ export function EntryCard({
     : entry.kind.toUpperCase();
 
   const handleCopy = async () => {
+    setRevealed(true);
     const ok = await copyText(entry.code);
     if (!ok) {
       notify("Gagal menyalin kode", "error");
@@ -71,23 +81,35 @@ export function EntryCard({
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  const handlePin = async () => {
+  const runExclusive = async (action: () => Promise<void>) => {
+    if (working) return;
+    setWorking(true);
     try {
-      await api.togglePin(entry.id);
-      await refresh();
-    } catch (caught) {
-      notify(errorMessage(caught), "error");
+      await action();
+    } finally {
+      setWorking(false);
     }
   };
 
-  const handleNext = async () => {
-    try {
-      await api.hotpNext(entry.id);
-      await refresh();
-    } catch (caught) {
-      notify(errorMessage(caught), "error");
-    }
-  };
+  const handlePin = () =>
+    void runExclusive(async () => {
+      try {
+        await api.togglePin(entry.id);
+        await refresh();
+      } catch (caught) {
+        notify(errorMessage(caught), "error");
+      }
+    });
+
+  const handleNext = () =>
+    void runExclusive(async () => {
+      try {
+        await api.hotpNext(entry.id);
+        await refresh();
+      } catch (caught) {
+        notify(errorMessage(caught), "error");
+      }
+    });
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700">
@@ -121,7 +143,11 @@ export function EntryCard({
         {isTotp ? (
           <span
             className={`shrink-0 pt-0.5 text-xs tabular-nums ${urgent ? "font-semibold text-red-500" : "text-zinc-400"}`}
-            title="Waktu tersisa"
+            title={
+              entry.next_code
+                ? `Kode berikutnya: ${formatCode(entry.next_code)}`
+                : "Waktu tersisa"
+            }
           >
             {formatRemaining(remaining)}
           </span>
@@ -130,6 +156,7 @@ export function EntryCard({
             type="button"
             className="btn btn-ghost btn-icon shrink-0"
             onClick={handleNext}
+            disabled={working}
             title="Ambil kode berikutnya"
             aria-label="Ambil kode berikutnya"
           >
@@ -142,9 +169,13 @@ export function EntryCard({
         type="button"
         onClick={handleCopy}
         className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3.5 py-2.5 transition-colors hover:bg-zinc-100 dark:bg-zinc-950/70 dark:hover:bg-zinc-800"
-        title="Salin kode"
+        title={hideCodes && !revealed ? "Klik untuk melihat & salin kode" : "Salin kode"}
       >
-        <span className="otp-code text-2xl leading-none text-zinc-900 dark:text-zinc-50">
+        <span
+          className={`otp-code text-2xl leading-none text-zinc-900 dark:text-zinc-50 ${
+            hideCodes && !revealed ? "select-none blur-sm" : ""
+          }`}
+        >
           {formatCode(entry.code)}
         </span>
         {copied ? (
@@ -169,10 +200,15 @@ export function EntryCard({
         <span className="truncate text-[12px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
           {entry.algorithm} · {entry.digits} digit
           {isTotp ? ` · ${entry.period}s` : ` · #${entry.counter}`}
+          {entry.next_code ? (
+            <span className="ml-1.5 normal-case opacity-70">
+              ↷ {formatCode(entry.next_code)}
+            </span>
+          ) : null}
         </span>
 
         <div className="flex shrink-0 items-center gap-0.5">
-          {total > 1 ? (
+          {total > 1 && !moveDisabled ? (
             <>
               <button
                 type="button"
@@ -199,6 +235,7 @@ export function EntryCard({
             type="button"
             className="btn btn-ghost btn-icon"
             onClick={handlePin}
+            disabled={working}
             title={entry.pinned ? "Lepas pin" : "Pin"}
             aria-label={entry.pinned ? "Lepas pin" : "Pin"}
           >

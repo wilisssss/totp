@@ -5,6 +5,7 @@ import { errorMessage } from "../../api/tauri";
 import { Field } from "../../components/ui/Modal";
 import { KeyIcon, ShieldIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
+import { AuthCard } from "./AuthCard";
 import { useVault } from "./VaultProvider";
 
 /** First run: create the encrypted vault. */
@@ -20,6 +21,7 @@ export function SetupScreen() {
     event.preventDefault();
     setError(null);
 
+    // Keep in sync with MIN_PASSPHRASE_LEN in src-tauri/src/commands/vault.rs.
     if (passphrase.length < 8) {
       setError("Passphrase minimal 8 karakter");
       return;
@@ -38,25 +40,20 @@ export function SetupScreen() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center p-6">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-sm space-y-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        <div className="space-y-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white">
-            <ShieldIcon size={22} />
-          </div>
-          <h1 className="text-lg font-semibold tracking-tight">Buat vault baru</h1>
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Semua kode 2FA disimpan terenkripsi dengan passphrase ini.{" "}
-            <strong className="font-medium text-zinc-700 dark:text-zinc-300">
-              Tidak ada cara memulihkannya
-            </strong>{" "}
-            jika Anda lupa.
-          </p>
-        </div>
-
+    <AuthCard
+      title="Buat vault baru"
+      icon={<ShieldIcon size={22} />}
+      description={
+        <>
+          Semua kode 2FA disimpan terenkripsi dengan passphrase ini.{" "}
+          <strong className="font-medium text-zinc-700 dark:text-zinc-300">
+            Tidak ada cara memulihkannya
+          </strong>{" "}
+          jika Anda lupa.
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-5">
         <Field label="Passphrase" hint="min. 8 karakter">
           <input
             className="field"
@@ -90,6 +87,6 @@ export function SetupScreen() {
           )}
         </button>
       </form>
-    </div>
+    </AuthCard>
   );
 }

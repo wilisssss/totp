@@ -24,6 +24,11 @@ pub struct Settings {
     pub autolock_secs: u64,
     /// Local clock correction in seconds, applied to TOTP windows.
     pub offset_secs: i64,
+    /// Blur the derived codes until the card is clicked (privacy mode).
+    pub hide_codes: bool,
+    /// Hiding the window (close button) minimises to the tray instead of
+    /// quitting; the vault stays locked/unlocked as-is.
+    pub close_to_tray: bool,
 }
 
 impl Default for Settings {
@@ -32,6 +37,8 @@ impl Default for Settings {
             theme: Theme::System,
             autolock_secs: 300,
             offset_secs: 0,
+            hide_codes: false,
+            close_to_tray: false,
         }
     }
 }

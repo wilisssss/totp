@@ -1,5 +1,6 @@
 //! Tauri command surface. Everything the frontend can call lives here.
 
+pub mod backup;
 pub mod entries;
 pub mod importer;
 pub mod settings;
@@ -25,14 +26,15 @@ pub struct EntryView {
     pub code: String,
     /// Seconds until the code rotates (`0` for HOTP).
     pub remaining: u64,
-    pub updated_at: i64,
+    /// Preview of the next code (next window / counter + 1).
+    pub next_code: String,
 }
 
-/// Full state of the app, polled once per second by the frontend.
+/// Full state of the app, fetched by the frontend on rotation (local ticking
+/// keeps the countdown moving between fetches).
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     pub locked: bool,
-    pub vault_exists: bool,
     pub entries: Vec<EntryView>,
     pub offset_secs: i64,
     pub autolock_secs: u64,

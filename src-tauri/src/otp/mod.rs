@@ -6,6 +6,7 @@
 pub mod base32;
 pub mod entry;
 pub mod hotp;
+pub mod migration;
 pub mod totp;
 pub mod uri;
 

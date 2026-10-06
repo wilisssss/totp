@@ -1,4 +1,4 @@
-//! Entry CRUD plus the read-only snapshot the UI polls every second.
+//! Entry CRUD plus the snapshot the frontend fetches on rotation.
 
 use tauri::State;
 
@@ -8,6 +8,7 @@ use crate::otp::entry::{EntryInput, OtpEntry};
 use crate::otp::uri;
 use crate::qr;
 use crate::state::AppState;
+use crate::vault::store;
 
 fn view(entry: &OtpEntry, offset_secs: i64) -> EntryView {
     EntryView {
@@ -24,7 +25,7 @@ fn view(entry: &OtpEntry, offset_secs: i64) -> EntryView {
             .code(offset_secs)
             .unwrap_or_else(|| "invalid".to_string()),
         remaining: entry.remaining(offset_secs),
-        updated_at: entry.updated_at,
+        next_code: entry.next_code(offset_secs).unwrap_or_default(),
     }
 }
 
@@ -34,12 +35,10 @@ pub fn build_snapshot(state: &AppState) -> AppResult<Snapshot> {
     state.lock_if_idle();
 
     let settings = state.settings()?;
-    let vault_exists = state.is_vault_present();
 
     if state.is_locked()? {
         return Ok(Snapshot {
             locked: true,
-            vault_exists,
             entries: Vec::new(),
             offset_secs: settings.offset_secs,
             autolock_secs: settings.autolock_secs,
@@ -56,7 +55,6 @@ pub fn build_snapshot(state: &AppState) -> AppResult<Snapshot> {
 
     Ok(Snapshot {
         locked: false,
-        vault_exists,
         entries,
         offset_secs: offset,
         autolock_secs: settings.autolock_secs,
@@ -166,13 +164,21 @@ pub fn entry_toggle_pin(state: State<'_, AppState>, id: String) -> AppResult<Ent
     let offset = state.settings()?.offset_secs;
 
     let entry = state.update_entries(|entries| {
-        let entry = entries
-            .iter_mut()
-            .find(|entry| entry.id == id)
+        let position = entries
+            .iter()
+            .position(|entry| entry.id == id)
             .ok_or(AppError::NotFound)?;
+        let mut entry = entries.remove(position);
         entry.pinned = !entry.pinned;
         entry.updated_at = chrono::Local::now().timestamp();
-        Ok(entry.clone())
+
+        // A freshly pinned entry moves to the top; unpinning keeps its slot.
+        if entry.pinned {
+            entries.insert(0, entry.clone());
+        } else {
+            entries.insert(position, entry.clone());
+        }
+        Ok(entry)
     })?;
 
     Ok(view(&entry, offset))
@@ -260,6 +266,7 @@ pub async fn export_backup(state: State<'_, AppState>) -> AppResult<Option<Strin
         return Ok(None);
     };
 
-    std::fs::write(&path, text)?;
+    // The file contains every secret in plain text — owner-only permissions.
+    store::write_private(&path, text.as_bytes())?;
     Ok(Some(path.display().to_string()))
 }

@@ -152,6 +152,28 @@ impl OtpEntry {
         }
     }
 
+    /// Preview of the next code: the following TOTP window, or the code for
+    /// `counter + 1` on HOTP entries.
+    pub fn next_code(&self, offset_secs: i64) -> Option<String> {
+        let key = self.key_bytes().ok()?;
+        Some(match self.kind {
+            OtpKind::Totp => totp::generate(
+                &key,
+                now_secs().saturating_add(self.period),
+                self.period,
+                self.digits,
+                self.algorithm,
+                offset_secs,
+            ),
+            OtpKind::Hotp => hotp::generate(
+                &key,
+                self.counter.saturating_add(1),
+                self.digits,
+                self.algorithm,
+            ),
+        })
+    }
+
     /// Advance and persist the HOTP counter.
     pub fn next_hotp(&mut self) -> Result<(), OtpError> {
         if self.kind != OtpKind::Hotp {

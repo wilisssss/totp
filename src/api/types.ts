@@ -20,12 +20,12 @@ export interface EntryView {
   pinned: boolean;
   code: string;
   remaining: number;
-  updated_at: number;
+  /** Preview of the next code (next window / counter + 1). */
+  next_code: string;
 }
 
 export interface Snapshot {
   locked: boolean;
-  vault_exists: boolean;
   entries: EntryView[];
   offset_secs: number;
   autolock_secs: number;
@@ -51,6 +51,10 @@ export interface Settings {
   theme: Theme;
   autolock_secs: number;
   offset_secs: number;
+  /** Blur codes until the card is clicked (privacy mode). */
+  hide_codes: boolean;
+  /** Close button hides to the tray instead of quitting. */
+  close_to_tray: boolean;
 }
 
 export interface ImportIssue {

@@ -4,7 +4,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api, errorMessage } from "../../api/tauri";
 import type { ImportReport } from "../../api/types";
 import { Modal } from "../../components/ui/Modal";
-import { AlertIcon, UploadIcon } from "../../components/ui/icons";
+import { FormError } from "../../components/ui/FormError";
+import { UploadIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
 
@@ -62,8 +63,16 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   const importFile = useCallback(
     (file: File) => {
       void (async () => {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        await runImport(() => api.importQrBytes(bytes));
+        // Base64 keeps large images cheap over the IPC bridge (a JSON number
+        // array would be ~5× larger than the file itself).
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Gagal membaca file gambar"));
+          reader.readAsDataURL(file);
+        });
+        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        await runImport(() => api.importQrBytes(base64));
       })();
     },
     [runImport],
@@ -149,7 +158,9 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
             rows={4}
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder={"otpauth://totp/GitHub:nama@contoh.com?secret=JBSW..."}
+            placeholder={
+              "otpauth://totp/GitHub:nama@contoh.com?secret=JBSW...\notpauth-migration://offline?data=... (Google Authenticator)"
+            }
             spellCheck={false}
             data-selectable
           />
@@ -185,12 +196,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           }}
         />
 
-        {error ? (
-          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
-            <AlertIcon size={14} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        ) : null}
+        {error ? <FormError message={error} /> : null}
 
         {report ? (
           <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
