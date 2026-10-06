@@ -41,8 +41,11 @@ build() {
   CXXFLAGS="${kept[*]}"
 
   # The bundled frontend is produced by Vite, the desktop binary by Cargo.
+  # custom-protocol switches Tauri out of dev mode; without it the release
+  # binary would try to load http://localhost:1420 instead of the embedded UI.
   npm run build
-  cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+  cargo build --release --locked --features custom-protocol \
+    --manifest-path src-tauri/Cargo.toml
 }
 
 package() {

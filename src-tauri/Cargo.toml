@@ -39,6 +39,12 @@ ureq = "3.4.2"
 uuid = { version = "1.27.0", features = ["v4"] }
 zeroize = { version = "1.9.0", features = ["derive", "serde"] }
 
+[features]
+# Production builds only. `tauri dev` builds without this feature so the webview
+# loads the devUrl dev server; release builds enable it so the webview loads the
+# embedded frontend instead of http://localhost:1420. DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
 [profile.release]
 codegen-units = 1
 lto = true
