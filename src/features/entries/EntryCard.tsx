@@ -8,6 +8,7 @@ import {
   formatRemaining,
   hueFor,
   initials,
+  tickRemaining,
   windowProgress,
 } from "../../lib/format";
 import {
@@ -22,7 +23,7 @@ import {
   TrashIcon,
 } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
-import { useVault } from "../vault/VaultProvider";
+import { useTick, useVault } from "../vault/VaultProvider";
 
 interface EntryCardProps {
   entry: EntryView;
@@ -43,12 +44,17 @@ export function EntryCard({
 }: EntryCardProps) {
   const notify = useToast();
   const { refresh } = useVault();
+  const { now, snapshotAt } = useTick();
 
   const [copied, setCopied] = useState(false);
 
   const isTotp = entry.kind === "totp";
-  const urgent = isTotp && entry.remaining <= 5;
-  const progress = isTotp ? windowProgress(entry.remaining, entry.period) : 0;
+  // Derive the countdown locally from the snapshot's age instead of waiting
+  // for a fresh IPC snapshot every second.
+  const elapsedSecs = snapshotAt > 0 ? Math.max(0, (now - snapshotAt) / 1000) : 0;
+  const remaining = isTotp ? tickRemaining(entry.remaining, entry.period, elapsedSecs) : 0;
+  const urgent = isTotp && remaining <= 5;
+  const progress = isTotp ? windowProgress(remaining, entry.period) : 0;
   const title = entry.issuer || entry.account || "(tanpa nama)";
   const subtitle = entry.issuer
     ? entry.account || entry.kind.toUpperCase()
@@ -117,7 +123,7 @@ export function EntryCard({
             className={`shrink-0 pt-0.5 text-xs tabular-nums ${urgent ? "font-semibold text-red-500" : "text-zinc-400"}`}
             title="Waktu tersisa"
           >
-            {formatRemaining(entry.remaining)}
+            {formatRemaining(remaining)}
           </span>
         ) : (
           <button
@@ -149,11 +155,11 @@ export function EntryCard({
       </button>
 
       {isTotp ? (
+        // Steps once per second together with the countdown (no continuous
+        // width transition — that used to animate 100% of the time).
         <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
           <div
-            className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
-              urgent ? "bg-red-500" : "bg-indigo-500"
-            }`}
+            className={`h-full rounded-full ${urgent ? "bg-red-500" : "bg-indigo-500"}`}
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>

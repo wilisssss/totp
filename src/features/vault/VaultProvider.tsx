@@ -1,10 +1,40 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { Settings, Snapshot, Theme } from "../../api/types";
 
 export type Phase = "loading" | "setup" | "locked" | "ready";
+
+/**
+ * Local clock for the TOTP cards: the wall clock time (`now`) and the moment
+ * the current snapshot was fetched (`snapshotAt`). Cards derive the countdown
+ * from these instead of re-fetching the whole snapshot every second.
+ */
+export interface TickState {
+  now: number;
+  snapshotAt: number;
+}
+
+const NO_TICK: TickState = { now: 0, snapshotAt: 0 };
+
+const TickContext = createContext<TickState>(NO_TICK);
+
+/** Ticks once a second while the vault is unlocked (no IPC involved). */
+export function useTick(): TickState {
+  return useContext(TickContext);
+}
+
+/** Refresh the snapshot at least this often even when nothing rotates. */
+const SAFETY_REFRESH_SECS = 15;
 
 interface VaultContextValue {
   phase: Phase;
@@ -49,8 +79,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState<TickState>(NO_TICK);
+
+  // Latest snapshot + when it was adopted, readable from the ticker without
+  // re-subscribing the interval on every snapshot change.
+  const snapshotRef = useRef<Snapshot | null>(null);
+  const snapshotAtRef = useRef(0);
 
   const adoptSnapshot = useCallback((next: Snapshot) => {
+    snapshotRef.current = next;
+    snapshotAtRef.current = Date.now();
     setSnapshot(next);
     setPhase(next.locked ? "locked" : "ready");
   }, []);
@@ -99,10 +137,34 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     };
   }, [adoptSnapshot]);
 
-  // Poll the derived codes once a second while unlocked.
+  // Keep the countdown moving locally: tick once a second (pure client side),
+  // and only hit the backend when a code actually rotates — or every
+  // SAFETY_REFRESH_SECS as a drift guard. This replaces the previous
+  // once-a-second full snapshot poll that re-serialised every entry over IPC.
   useEffect(() => {
     if (phase !== "ready") return;
-    const timer = window.setInterval(() => void refresh(), 1000);
+    setTick({ now: Date.now(), snapshotAt: snapshotAtRef.current });
+
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setTick({ now, snapshotAt: snapshotAtRef.current });
+
+      const snap = snapshotRef.current;
+      const at = snapshotAtRef.current;
+      if (!snap || at <= 0) return;
+
+      const elapsed = (now - at) / 1000;
+      const rotated = snap.entries.some(
+        (entry) => entry.kind === "totp" && elapsed >= entry.remaining,
+      );
+      if ((rotated || elapsed >= SAFETY_REFRESH_SECS) && !inFlight) {
+        inFlight = true;
+        void refresh().finally(() => {
+          inFlight = false;
+        });
+      }
+    }, 1000);
     return () => window.clearInterval(timer);
   }, [phase, refresh]);
 
@@ -203,5 +265,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
+  return (
+    <VaultContext.Provider value={value}>
+      <TickContext.Provider value={tick}>{children}</TickContext.Provider>
+    </VaultContext.Provider>
+  );
 }

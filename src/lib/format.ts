@@ -61,6 +61,20 @@ export function windowProgress(remaining: number, period: number): number {
   return 1 - left / period;
 }
 
+/**
+ * Advance a snapshot countdown locally: `remaining` was computed on the
+ * backend `elapsedSecs` ago, so subtract the time that passed since then.
+ * Wraps at 0 into the next window (backend `remaining` is always ≥ 1, so a
+ * local result of 0 means "just flipped" and lands on a full period).
+ */
+export function tickRemaining(remaining: number, period: number, elapsedSecs: number): number {
+  if (period <= 0) return remaining;
+  const spent = Math.max(0, Math.floor(elapsedSecs));
+  const left = remaining - spent;
+  const wrapped = ((((left - 1) % period) + period) % period) + 1;
+  return wrapped;
+}
+
 /** Default input payload for the entry form. */
 export function emptyEntryInput() {
   return {

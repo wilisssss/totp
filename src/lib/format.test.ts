@@ -8,6 +8,7 @@ import {
   hueFor,
   initials,
   matchesQuery,
+  tickRemaining,
   windowProgress,
 } from "./format";
 
@@ -77,6 +78,43 @@ describe("windowProgress", () => {
     expect(windowProgress(999, 30)).toBe(0);
     expect(windowProgress(-1, 30)).toBe(1);
     expect(windowProgress(5, 0)).toBe(0);
+  });
+});
+
+describe("tickRemaining", () => {
+  it("keeps the countdown at rest when nothing elapsed", () => {
+    expect(tickRemaining(30, 30, 0)).toBe(30);
+    expect(tickRemaining(7, 30, 0)).toBe(7);
+    expect(tickRemaining(1, 30, 0)).toBe(1);
+  });
+
+  it("counts down locally one second at a time", () => {
+    expect(tickRemaining(30, 30, 1)).toBe(29);
+    expect(tickRemaining(30, 30, 5)).toBe(25);
+    expect(tickRemaining(7, 30, 3)).toBe(4);
+  });
+
+  it("wraps into the next window when the code rotates", () => {
+    // remaining=1, one second later → full window again.
+    expect(tickRemaining(1, 30, 1)).toBe(30);
+    expect(tickRemaining(30, 30, 30)).toBe(30);
+    // Two full windows passed.
+    expect(tickRemaining(15, 30, 45)).toBe(30);
+    // Mid-window phase is preserved across wraps.
+    expect(tickRemaining(10, 30, 20)).toBe(20);
+  });
+
+  it("ignores negative elapsed time", () => {
+    expect(tickRemaining(30, 30, -5)).toBe(30);
+  });
+
+  it("floors fractional elapsed seconds", () => {
+    expect(tickRemaining(30, 30, 1.7)).toBe(29);
+    expect(tickRemaining(30, 30, 22.03)).toBe(8);
+  });
+
+  it("passes through non TOTP values untouched", () => {
+    expect(tickRemaining(5, 0, 3)).toBe(5);
   });
 });
 
