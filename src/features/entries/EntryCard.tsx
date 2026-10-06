@@ -16,6 +16,7 @@ import {
   ArrowUpIcon,
   CheckIcon,
   CopyIcon,
+  KeyIcon,
   PencilIcon,
   PinIcon,
   QrIcon,
@@ -28,7 +29,7 @@ import { useTick, useVault } from "../vault/VaultProvider";
 interface EntryCardProps {
   entry: EntryView;
   total: number;
-  /** Reordering is confusing while a search filter hides entries. */
+  /** Manual reordering is confusing while filtered or sorted. */
   moveDisabled?: boolean;
   onEdit: (entry: EntryView) => void;
   onDelete: (entry: EntryView) => void;
@@ -106,6 +107,21 @@ export function EntryCard({
       try {
         await api.hotpNext(entry.id);
         await refresh();
+      } catch (caught) {
+        notify(errorMessage(caught), "error");
+      }
+    });
+
+  const handleCopySecret = () =>
+    void runExclusive(async () => {
+      try {
+        const secret = await api.revealSecret(entry.id);
+        const ok = await copyText(secret);
+        if (!ok) {
+          notify("Gagal menyalin secret", "error");
+          return;
+        }
+        notify("Secret disalin ke clipboard", "success");
       } catch (caught) {
         notify(errorMessage(caught), "error");
       }
@@ -240,6 +256,17 @@ export function EntryCard({
             aria-label={entry.pinned ? "Lepas pin" : "Pin"}
           >
             <PinIcon size={13} className={entry.pinned ? "text-indigo-500" : ""} />
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={handleCopySecret}
+            disabled={working}
+            title="Salin secret"
+            aria-label="Salin secret"
+          >
+            <KeyIcon size={13} />
           </button>
 
           <button

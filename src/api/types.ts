@@ -22,6 +22,8 @@ export interface EntryView {
   remaining: number;
   /** Preview of the next code (next window / counter + 1). */
   next_code: string;
+  /** Unix seconds when the entry was added (client-side sorting). */
+  created_at: number;
 }
 
 export interface Snapshot {

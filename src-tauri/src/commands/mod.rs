@@ -28,6 +28,8 @@ pub struct EntryView {
     pub remaining: u64,
     /// Preview of the next code (next window / counter + 1).
     pub next_code: String,
+    /// Unix seconds when the entry was added (client-side sorting).
+    pub created_at: i64,
 }
 
 /// Full state of the app, fetched by the frontend on rotation (local ticking

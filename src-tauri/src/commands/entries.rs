@@ -26,6 +26,7 @@ fn view(entry: &OtpEntry, offset_secs: i64) -> EntryView {
             .unwrap_or_else(|| "invalid".to_string()),
         remaining: entry.remaining(offset_secs),
         next_code: entry.next_code(offset_secs).unwrap_or_default(),
+        created_at: entry.created_at,
     }
 }
 
