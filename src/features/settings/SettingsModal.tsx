@@ -254,7 +254,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <DownloadIcon size={14} /> Simpan file backup
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+          <p className="text-[13px] leading-relaxed text-zinc-400 dark:text-zinc-500">
             Backup berupa teks berisi secret setiap akun dalam bentuk{" "}
             <span className="font-mono">otpauth://</span>. Simpan di tempat aman.
           </p>

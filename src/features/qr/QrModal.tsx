@@ -57,7 +57,7 @@ export function QrModal({ entry, onClose }: { entry: EntryView; onClose: () => v
           )}
         </div>
 
-        <p className="text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+        <p className="text-[13px] leading-relaxed text-zinc-400 dark:text-zinc-500">
           Pindai QR ini untuk memindahkan akun ke aplikasi lain. QR berisi secret — jangan
           bagikan ke orang lain.
         </p>

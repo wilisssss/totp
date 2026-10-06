@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { api, errorMessage } from "../../api/tauri";
 import type { Algorithm, EntryInput, EntryView, OtpKind } from "../../api/types";
 import { Field, Modal } from "../../components/ui/Modal";
+import { AlertIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
 
@@ -116,7 +117,14 @@ export function EntryFormModal({ entry, onClose }: EntryFormModalProps) {
       }
     >
       <form id="entry-form" onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {error ? (
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+            <AlertIcon size={14} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
           <Field label="Layanan" hint="opsional">
             <input
               className="field"
@@ -140,11 +148,7 @@ export function EntryFormModal({ entry, onClose }: EntryFormModalProps) {
           </Field>
         </div>
 
-        <Field
-          label="Secret (Base32)"
-          hint={loadingSecret ? "memuat..." : undefined}
-          error={error ?? undefined}
-        >
+        <Field label="Secret (Base32)" hint={loadingSecret ? "memuat..." : undefined}>
           <textarea
             className="field font-mono text-xs"
             rows={2}
@@ -156,79 +160,83 @@ export function EntryFormModal({ entry, onClose }: EntryFormModalProps) {
           />
         </Field>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Tipe">
-            <div className="flex overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700">
-              {(["totp", "hotp"] as OtpKind[]).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => update("kind", kind)}
-                  className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                    form.kind === kind
-                      ? "bg-indigo-600 text-white"
-                      : "bg-transparent text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  {kind}
-                </button>
-              ))}
-            </div>
-          </Field>
+        <section className="space-y-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Parameter OTP
+          </h3>
 
-          <Field label="Algoritma">
-            <select
-              className="field"
-              value={form.algorithm}
-              onChange={(event) => update("algorithm", event.target.value as Algorithm)}
-            >
-              <option value="SHA1">SHA1</option>
-              <option value="SHA256">SHA256</option>
-              <option value="SHA512">SHA512</option>
-            </select>
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <Field label="Digit">
-            <select
-              className="field"
-              value={form.digits}
-              onChange={(event) => update("digits", Number(event.target.value))}
-            >
-              {DIGIT_CHOICES.map((digits) => (
-                <option key={digits} value={digits}>
-                  {digits}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          {form.kind === "totp" ? (
-            <Field label="Periode" hint="detik">
-              <input
-                className="field"
-                type="number"
-                min={1}
-                max={300}
-                value={form.period}
-                onChange={(event) => update("period", Number(event.target.value))}
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tipe">
+              <div className="flex h-10 overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700">
+                {(["totp", "hotp"] as OtpKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => update("kind", kind)}
+                    className={`flex-1 px-3 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                      form.kind === kind
+                        ? "bg-indigo-600 text-white"
+                        : "bg-transparent text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {kind}
+                  </button>
+                ))}
+              </div>
             </Field>
-          ) : (
-            <Field label="Counter">
-              <input
-                className="field"
-                type="number"
-                min={0}
-                value={form.counter}
-                onChange={(event) => update("counter", Number(event.target.value))}
-              />
-            </Field>
-          )}
 
-          <div className="hidden sm:block" />
-        </div>
+            <Field label="Algoritma">
+              <select
+                className="field"
+                value={form.algorithm}
+                onChange={(event) => update("algorithm", event.target.value as Algorithm)}
+              >
+                <option value="SHA1">SHA1</option>
+                <option value="SHA256">SHA256</option>
+                <option value="SHA512">SHA512</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Digit">
+              <select
+                className="field"
+                value={form.digits}
+                onChange={(event) => update("digits", Number(event.target.value))}
+              >
+                {DIGIT_CHOICES.map((digits) => (
+                  <option key={digits} value={digits}>
+                    {digits}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {form.kind === "totp" ? (
+              <Field label="Periode" hint="detik">
+                <input
+                  className="field"
+                  type="number"
+                  min={1}
+                  max={300}
+                  value={form.period}
+                  onChange={(event) => update("period", Number(event.target.value))}
+                />
+              </Field>
+            ) : (
+              <Field label="Counter">
+                <input
+                  className="field"
+                  type="number"
+                  min={0}
+                  value={form.counter}
+                  onChange={(event) => update("counter", Number(event.target.value))}
+                />
+              </Field>
+            )}
+          </div>
+        </section>
 
         {/* Submit target lives outside the modal footer. */}
         <button type="submit" className="sr-only">

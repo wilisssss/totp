@@ -9,6 +9,16 @@
   --font-mono:
     ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono",
     monospace;
+
+  /* Every step is 2px larger than the Tailwind default (line-height ratios are
+     unitless, so they keep scaling with these sizes). */
+  --text-xs: 0.875rem; /* 12px → 14px */
+  --text-sm: 1rem; /* 14px → 16px */
+  --text-base: 1.125rem; /* 16px → 18px */
+  --text-lg: 1.25rem; /* 18px → 20px */
+  --text-xl: 1.375rem; /* 20px → 22px */
+  --text-2xl: 1.625rem; /* 24px → 26px */
+  --text-3xl: 2rem; /* 30px → 32px */
 }
 
 @layer base {
@@ -16,6 +26,16 @@
   body,
   #root {
     height: 100%;
+  }
+
+  /* Native controls (select popups, spinners, dialogs) follow this hint, so the
+     widget chrome always matches the active theme even when the OS differs. */
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
@@ -39,6 +59,18 @@
   select,
   [data-selectable] {
     user-select: text;
+  }
+
+  /* Spinner arrows are noise in number fields; typing is the primary input. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
   }
 
   ::-webkit-scrollbar {
@@ -82,8 +114,8 @@
     border: 1px solid var(--color-zinc-300);
     background-color: white;
     padding: 0.55rem 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 1rem; /* 16px: text-sm scale +2px */
+    line-height: 1.375rem;
     transition:
       border-color 0.15s ease,
       box-shadow 0.15s ease;
@@ -109,6 +141,33 @@
     color: var(--color-zinc-500);
   }
 
+  /* Selects are drawn fully by CSS: `appearance: none` keeps WebKitGTK from
+     painting its own (light) widget over the dark theme, and the chevron plus
+     option colours follow the theme as well. */
+  select.field {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.1rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2371717a'%3E%3Cpath fill-rule='evenodd' d='M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 1.05rem;
+  }
+
+  .dark select.field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23a1a1aa'%3E%3Cpath fill-rule='evenodd' d='M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  }
+
+  select.field option {
+    background-color: white;
+    color: var(--color-zinc-900);
+  }
+
+  .dark select.field option {
+    background-color: var(--color-zinc-900);
+    color: var(--color-zinc-100);
+  }
+
   .btn {
     display: inline-flex;
     align-items: center;
@@ -116,9 +175,9 @@
     gap: 0.4rem;
     border-radius: 0.625rem;
     padding: 0.45rem 0.85rem;
-    font-size: 0.8125rem;
+    font-size: 0.9375rem; /* 15px: text-xs scale +2px */
     font-weight: 550;
-    line-height: 1.25rem;
+    line-height: 1.375rem;
     transition:
       background-color 0.15s ease,
       color 0.15s ease,

@@ -168,7 +168,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           <span className="text-xs font-medium">
             {dragging ? "Lepaskan untuk mengimpor" : "Seret / paste gambar QR"}
           </span>
-          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+          <span className="text-[13px] text-zinc-400 dark:text-zinc-500">
             atau klik untuk memilih file (png, jpeg, webp)
           </span>
         </button>
@@ -203,7 +203,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {report.issues.length > 0 ? (
-              <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px] text-zinc-500 dark:text-zinc-400">
+              <ul className="max-h-40 space-y-1 overflow-y-auto text-[13px] text-zinc-500 dark:text-zinc-400">
                 {report.issues.map((issue, index) => (
                   <li key={`${issue.value}-${index}`} className="truncate">
                     <span className="font-medium">{issue.reason}:</span>{" "}
