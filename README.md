@@ -116,7 +116,10 @@ git push origin main --tags
 ```
 
 3. GitHub Actions membangun AppImage (Ubuntu) dan `totp-*.pkg.tar.zst`
-   (container `archlinux:base-devel`), lalu mengunggahnya ke rilis draft.
+   (container `archlinux:base-devel`) secara paralel, lalu menerbitkan
+   **satu** rilis draft berisi kedua berkas beserta `SHA256SUMS`.
+4. Pastikan kedua job hijau di tab Actions, lalu klik **Publish** pada rilis
+   draft tersebut.
 
 ## Lisensi
 
