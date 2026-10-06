@@ -1,0 +1,86 @@
+name: Release
+
+# Push a tag (e.g. v0.1.0) to publish an AppImage plus an Arch Linux
+# pacman package built in an archlinux:base-devel container.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  appimage:
+    name: AppImage (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build AppImage and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "TOTP ${{ github.ref_name }}"
+          releaseBody: >
+            Rilis otomatis: AppImage untuk Linux umum dan paket pacman
+            (.pkg.tar.zst) untuk Arch Linux. Periksa checksum di ringkasan rilis.
+          releaseDraft: true
+          prerelease: false
+          args: --bundles appimage
+
+  arch-package:
+    name: Pacman package (Arch Linux)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    needs: appimage
+    steps:
+      - name: Install checkout prerequisites
+        run: pacman -Syu --noconfirm git
+
+      - uses: actions/checkout@v4
+
+      # makepkg refuses to run as root, so build from a plain user.
+      - name: Build package
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chmod 440 /etc/sudoers.d/builder
+          cp -a "$GITHUB_WORKSPACE" /home/builder/src
+          chown -R builder:builder /home/builder/src
+          su builder -c 'cd /home/builder/src/packaging && makepkg -s --noconfirm --cleanbuild'
+          ls -la /home/builder/src/packaging
+
+      - name: Attach package to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: /home/builder/src/packaging/*.pkg.tar.zst

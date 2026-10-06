@@ -1,0 +1,46 @@
+# Maintainer: wilisssss <317244304+wilisssss@users.noreply.github.com>
+
+pkgname=totp
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Simple, offline TOTP / 2FA authenticator with an encrypted vault"
+arch=('x86_64')
+url="https://github.com/wilisssss/totp"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+makedepends=('cargo' 'npm')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+# The bundled frontend is produced by Vite, the desktop binary by Cargo.
+export npm_config_cache="$srcdir/npm-cache"
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  npm ci
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+
+  npm run build
+  cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+
+  install -Dm755 "src-tauri/target/release/$pkgname" \
+    "$pkgdir/usr/bin/$pkgname"
+
+  install -Dm644 packaging/totp.desktop \
+    "$pkgdir/usr/share/applications/totp.desktop"
+
+  local size
+  for size in 32 128 256; do
+    install -Dm644 "src-tauri/icons/${size}x${size}.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/totp.png"
+  done
+  install -Dm644 src-tauri/icons/128x128@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256@2/apps/totp.png"
+}

@@ -1,0 +1,220 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+
+import { api, errorMessage } from "../../api/tauri";
+import type { ImportReport } from "../../api/types";
+import { Modal } from "../../components/ui/Modal";
+import { AlertIcon, UploadIcon } from "../../components/ui/icons";
+import { useToast } from "../../components/ui/Toast";
+import { useVault } from "../vault/VaultProvider";
+
+/** Paste URIs, or drop/paste/pick a QR code image. */
+export function ImportModal({ onClose }: { onClose: () => void }) {
+  const notify = useToast();
+  const { refresh } = useVault();
+
+  const [text, setText] = useState("");
+  const [report, setReport] = useState<ImportReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [working, setWorking] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const runImport = useCallback(
+    async (action: () => Promise<ImportReport>) => {
+      setWorking(true);
+      setError(null);
+      try {
+        const result = await action();
+        setReport(result);
+        await refresh();
+        if (result.imported > 0) {
+          notify(`${result.imported} entri diimpor`, "success");
+        }
+        if (result.failed > 0 || result.skipped > 0) {
+          notify(`${result.failed} gagal, ${result.skipped} dilewati (duplikat)`, "error");
+        }
+      } catch (caught) {
+        setError(errorMessage(caught));
+      } finally {
+        setWorking(false);
+      }
+    },
+    [notify, refresh],
+  );
+
+  const importText = useCallback(() => {
+    if (!text.trim()) {
+      setError("Tempel URI otpauth:// di kotak teks");
+      return;
+    }
+    void runImport(() => api.importText(text));
+  }, [runImport, text]);
+
+  const importPath = useCallback(
+    (path: string) => {
+      void runImport(() => api.importQrFromPath(path));
+    },
+    [runImport],
+  );
+
+  const importFile = useCallback(
+    (file: File) => {
+      void (async () => {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await runImport(() => api.importQrBytes(bytes));
+      })();
+    },
+    [runImport],
+  );
+
+  const importPathRef = useRef(importPath);
+  importPathRef.current = importPath;
+  const importFileRef = useRef(importFile);
+  importFileRef.current = importFile;
+
+  // Native file drag & drop (the WebView swallows the DOM drop event).
+  useEffect(() => {
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const listener = await getCurrentWebview().onDragDropEvent((event) => {
+          const payload = event.payload as { type?: string; paths?: string[] };
+          if (payload.type === "enter") setDragging(true);
+          else if (payload.type === "leave") setDragging(false);
+          else if (payload.type === "drop") {
+            setDragging(false);
+            const path = payload.paths?.[0];
+            if (path) importPathRef.current(path);
+          }
+        });
+
+        if (cancelled) listener();
+        else dispose = listener;
+      } catch (caught) {
+        console.warn("drag & drop native tidak tersedia", caught);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, []);
+
+  // Ctrl+V with an image in the clipboard imports it directly.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const file = event.clipboardData?.files?.[0];
+      if (file) {
+        event.preventDefault();
+        importFileRef.current(file);
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
+  return (
+    <Modal
+      title="Impor akun"
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            {report ? "Selesai" : "Batal"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={importText}
+            disabled={working}
+          >
+            {working ? "Mengimpor..." : "Impor URI"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            URI otpauth:// (satu per baris)
+          </label>
+          <textarea
+            className="field font-mono text-xs"
+            rows={4}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder={"otpauth://totp/GitHub:nama@contoh.com?secret=JBSW..."}
+            spellCheck={false}
+            data-selectable
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
+            dragging
+              ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+              : "border-zinc-300 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-300"
+          }`}
+        >
+          <UploadIcon size={20} />
+          <span className="text-xs font-medium">
+            {dragging ? "Lepaskan untuk mengimpor" : "Seret / paste gambar QR"}
+          </span>
+          <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            atau klik untuk memilih file (png, jpeg, webp)
+          </span>
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) importFile(file);
+            event.target.value = "";
+          }}
+        />
+
+        {error ? (
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+            <AlertIcon size={14} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {report ? (
+          <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+            <div className="flex gap-3 text-xs">
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                {report.imported} masuk
+              </span>
+              <span className="text-zinc-500">{report.skipped} duplikat</span>
+              <span className="text-red-600 dark:text-red-400">{report.failed} gagal</span>
+            </div>
+
+            {report.issues.length > 0 ? (
+              <ul className="max-h-40 space-y-1 overflow-y-auto text-[11px] text-zinc-500 dark:text-zinc-400">
+                {report.issues.map((issue, index) => (
+                  <li key={`${issue.value}-${index}`} className="truncate">
+                    <span className="font-medium">{issue.reason}:</span>{" "}
+                    <span className="font-mono">{issue.value.slice(0, 80)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}

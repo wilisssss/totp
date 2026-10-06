@@ -1,0 +1,207 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+
+import { api, errorMessage } from "../../api/tauri";
+import type { Settings, Snapshot, Theme } from "../../api/types";
+
+export type Phase = "loading" | "setup" | "locked" | "ready";
+
+interface VaultContextValue {
+  phase: Phase;
+  snapshot: Snapshot | null;
+  settings: Settings | null;
+  /** True while an Argon2 or disk operation is running. */
+  busy: boolean;
+  /** Fatal error from startup (backend unreachable, corrupt vault, ...). */
+  error: string | null;
+  clearError: () => void;
+  refresh: () => Promise<void>;
+  createVault: (passphrase: string) => Promise<void>;
+  unlock: (passphrase: string) => Promise<void>;
+  lock: () => Promise<void>;
+  changePassphrase: (oldPassphrase: string, newPassphrase: string) => Promise<void>;
+  saveSettings: (settings: Settings) => Promise<void>;
+  syncClock: () => Promise<{ offsetSecs: number; corrected: boolean }>;
+}
+
+const VaultContext = createContext<VaultContextValue | null>(null);
+
+export function useVault(): VaultContextValue {
+  const value = useContext(VaultContext);
+  if (!value) {
+    throw new Error("useVault harus dipakai di dalam VaultProvider");
+  }
+  return value;
+}
+
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  if (theme === "system") {
+    root.classList.toggle("dark", window.matchMedia("(prefers-color-scheme: dark)").matches);
+  } else {
+    root.classList.toggle("dark", theme === "dark");
+  }
+}
+
+export function VaultProvider({ children }: { children: ReactNode }) {
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const adoptSnapshot = useCallback((next: Snapshot) => {
+    setSnapshot(next);
+    setPhase(next.locked ? "locked" : "ready");
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      adoptSnapshot(await api.snapshot());
+    } catch (caught) {
+      // The backend is going away (app closing) — keep the current view.
+      console.error("snapshot gagal", caught);
+    }
+  }, [adoptSnapshot]);
+
+  // Bootstrap: settings first (theme applies even while locked), then status.
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const current = await api.getSettings();
+        if (cancelled) return;
+        setSettings(current);
+        applyTheme(current.theme);
+
+        const status = await api.status();
+        if (cancelled) return;
+
+        if (!status.exists) {
+          setPhase("setup");
+        } else if (status.locked) {
+          setPhase("locked");
+        } else {
+          setPhase("ready");
+          adoptSnapshot(await api.snapshot());
+        }
+      } catch (caught) {
+        if (!cancelled) {
+          setError(errorMessage(caught));
+          setPhase("setup");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adoptSnapshot]);
+
+  // Poll the derived codes once a second while unlocked.
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const timer = window.setInterval(() => void refresh(), 1000);
+    return () => window.clearInterval(timer);
+  }, [phase, refresh]);
+
+  // Follow the OS theme when the setting is "system".
+  useEffect(() => {
+    if (settings?.theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme("system");
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [settings?.theme]);
+
+  const run = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
+    setBusy(true);
+    try {
+      return await action();
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const createVault = useCallback(
+    async (passphrase: string) => {
+      adoptSnapshot(await run(() => api.createVault(passphrase)));
+    },
+    [adoptSnapshot, run],
+  );
+
+  const unlock = useCallback(
+    async (passphrase: string) => {
+      adoptSnapshot(await run(() => api.unlock(passphrase)));
+    },
+    [adoptSnapshot, run],
+  );
+
+  const lock = useCallback(async () => {
+    await run(() => api.lock());
+    setSnapshot(null);
+    setPhase("locked");
+  }, [run]);
+
+  const changePassphrase = useCallback(
+    async (oldPassphrase: string, newPassphrase: string) => {
+      adoptSnapshot(await run(() => api.changePassphrase(oldPassphrase, newPassphrase)));
+    },
+    [adoptSnapshot, run],
+  );
+
+  const saveSettings = useCallback(
+    async (next: Settings) => {
+      const saved = await run(() => api.setSettings(next));
+      setSettings(saved);
+      applyTheme(saved.theme);
+    },
+    [run],
+  );
+
+  const syncClock = useCallback(async () => {
+    const result = await run(() => api.syncClock());
+    setSettings((current) =>
+      current ? { ...current, offset_secs: result.offset_secs } : current,
+    );
+    return {
+      offsetSecs: result.offset_secs,
+      corrected: result.corrected,
+    };
+  }, [run]);
+
+  const value = useMemo<VaultContextValue>(
+    () => ({
+      phase,
+      snapshot,
+      settings,
+      busy,
+      error,
+      clearError: () => setError(null),
+      refresh,
+      createVault,
+      unlock,
+      lock,
+      changePassphrase,
+      saveSettings,
+      syncClock,
+    }),
+    [
+      phase,
+      snapshot,
+      settings,
+      busy,
+      error,
+      refresh,
+      createVault,
+      unlock,
+      lock,
+      changePassphrase,
+      saveSettings,
+      syncClock,
+    ],
+  );
+
+  return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
+}

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=TOTP
+GenericName=Authenticator
+Comment=Simple offline TOTP / 2FA authenticator
+Exec=totp
+Icon=totp
+Terminal=false
+Categories=Utility;Security;
+StartupWMClass=totp
+Keywords=2fa;otp;totp;authenticator;security;

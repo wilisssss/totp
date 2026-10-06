@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* Class based dark mode: VaultProvider toggles `dark` on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono:
+    ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: var(--color-zinc-100);
+    color: var(--color-zinc-900);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  .dark body {
+    background-color: var(--color-zinc-950);
+    color: var(--color-zinc-100);
+  }
+
+  /* Secrets and codes must be selectable/copyable, the rest should not. */
+  input,
+  textarea,
+  select,
+  [data-selectable] {
+    user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--color-zinc-400) 60%, transparent);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--color-zinc-600) 70%, transparent);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-indigo-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .otp-code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 0.625rem;
+    border: 1px solid var(--color-zinc-300);
+    background-color: white;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .field::placeholder {
+    color: var(--color-zinc-400);
+  }
+
+  .field:focus {
+    border-color: var(--color-indigo-500);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-indigo-500) 25%, transparent);
+    outline: none;
+  }
+
+  .dark .field {
+    border-color: var(--color-zinc-700);
+    background-color: var(--color-zinc-900);
+    color: var(--color-zinc-100);
+  }
+
+  .dark .field::placeholder {
+    color: var(--color-zinc-500);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.625rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 550;
+    line-height: 1.25rem;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease,
+      opacity 0.15s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background-color: var(--color-indigo-600);
+    color: white;
+  }
+
+  .btn-primary:not(:disabled):hover {
+    background-color: var(--color-indigo-500);
+  }
+
+  .btn-ghost {
+    border-color: var(--color-zinc-300);
+    background-color: transparent;
+    color: var(--color-zinc-700);
+  }
+
+  .btn-ghost:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--color-zinc-200) 70%, transparent);
+  }
+
+  .dark .btn-ghost {
+    border-color: var(--color-zinc-700);
+    color: var(--color-zinc-300);
+  }
+
+  .dark .btn-ghost:not(:disabled):hover {
+    background-color: color-mix(in oklab, var(--color-zinc-800) 80%, transparent);
+  }
+
+  .btn-danger {
+    background-color: var(--color-red-600);
+    color: white;
+  }
+
+  .btn-danger:not(:disabled):hover {
+    background-color: var(--color-red-500);
+  }
+
+  .btn-icon {
+    padding: 0.4rem;
+    border-radius: 0.55rem;
+  }
+}
