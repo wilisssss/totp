@@ -37,10 +37,15 @@ package() {
     "$pkgdir/usr/share/applications/totp.desktop"
 
   local size
-  for size in 32 128 256; do
+  for size in 32 128; do
     install -Dm644 "src-tauri/icons/${size}x${size}.png" \
       "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/totp.png"
   done
+
+  # Tauri's icon set ships no 256x256.png, but 128x128@2x.png is a real
+  # 256x256 bitmap, so it fills both the plain and the 2x density slot.
+  install -Dm644 src-tauri/icons/128x128@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/totp.png"
   install -Dm644 src-tauri/icons/128x128@2x.png \
     "$pkgdir/usr/share/icons/hicolor/256x256@2/apps/totp.png"
 }

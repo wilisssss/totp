@@ -18,6 +18,12 @@ src-tauri/gen
 *.AppImage
 *.appimage.tar.gz
 
+# packaging (makepkg run)
+packaging/src/
+packaging/pkg/
+packaging/*.pkg.tar.zst
+packaging/*.pkg.tar.zst.sig
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
