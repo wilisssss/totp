@@ -146,22 +146,21 @@ pub fn parse(uri: &str, timestamp: i64) -> Result<OtpEntry, OtpError> {
         }
     }
 
-    // Split the *raw* label first: `%3A` inside an issuer must not be mistaken
-    // for the issuer/account separator.
-    let (raw_issuer, raw_account) = match label_raw.split_once(':') {
-        Some((issuer, account)) => (Some(issuer), account),
-        None => (None, label_raw),
+    // Issuers percent-encode the whole label (Google emits
+    // `Google%3Aname%40example.com`), so decode first and split afterwards —
+    // the same way Google Authenticator reads it. Splitting the raw text
+    // first would leave the issuer glued to the account name.
+    let label = percent_decode(label_raw, false);
+    let (label_issuer, label_account) = match label.split_once(':') {
+        Some((issuer, account)) => (issuer, account),
+        None => ("", label.as_str()),
     };
-    let label_issuer = raw_issuer
-        .map(|value| percent_decode(value, false))
-        .unwrap_or_default();
-    let label_account = percent_decode(raw_account, false);
 
-    let issuer = issuer_param.unwrap_or(label_issuer);
+    let issuer = issuer_param.unwrap_or_else(|| label_issuer.to_string());
 
     let input = EntryInput {
         issuer,
-        account: label_account,
+        account: label_account.to_string(),
         secret,
         kind: Some(kind),
         algorithm: Some(algorithm),
@@ -242,6 +241,20 @@ mod tests {
 
     /// Whatever the QR encodes must come back identical when another app
     /// re-parses it — issuer, account name and secret survive the trip.
+    /// Regression: a QR scanned from Google used to store the account as
+    /// "Google:regisadewa05@gmail.com" because the %3A-encoded separator was
+    /// not decoded before splitting the label.
+    #[test]
+    fn google_style_encoded_label_splits_issuer_and_account() {
+        let entry = parse(
+            "otpauth://totp/Google%3Aregisadewa05%40gmail.com?secret=JBSWY3DPEEHS&issuer=Google",
+            timestamp(),
+        )
+        .unwrap();
+        assert_eq!(entry.issuer, "Google");
+        assert_eq!(entry.account, "regisadewa05@gmail.com");
+    }
+
     #[test]
     fn to_uri_roundtrip_preserves_credential() {
         let original = parse(
@@ -279,14 +292,15 @@ mod tests {
         assert_eq!(entry.issuer, "GitHub");
         assert_eq!(entry.account, "octo@mail.com");
 
-        // A label without an unencoded colon is a single account name.
+        // Google encodes the label's separator colon as %3A; the label is
+        // decoded before splitting, so the issuer still comes loose.
         let entry = parse(
             "otpauth://totp/GitHub%3Aocto%40mail.com?secret=JBSWY3DPEEHS",
             timestamp(),
         )
         .unwrap();
-        assert_eq!(entry.issuer, "");
-        assert_eq!(entry.account, "GitHub:octo@mail.com");
+        assert_eq!(entry.issuer, "GitHub");
+        assert_eq!(entry.account, "octo@mail.com");
     }
 
     #[test]
@@ -355,14 +369,17 @@ mod tests {
     #[test]
     fn encodes_special_characters_in_labels() {
         let mut entry = parse("otpauth://totp/x?secret=JBSWY3DPEEHS", timestamp()).unwrap();
-        entry.issuer = "A B:C/D".into();
-        entry.account = "e@mail.com".into();
+        // NOTE: an issuer containing a literal ':' is inherently ambiguous
+        // once the label is decoded (Google Authenticator has the same
+        // limitation) — everything before the first ':' becomes the issuer.
+        entry.issuer = "A B/C/D".into();
+        entry.account = "e:mail.com".into();
         let uri = to_uri(&entry);
 
         let expected_label = format!(
             "{}:{}",
-            percent_encode("A B:C/D"),
-            percent_encode("e@mail.com")
+            percent_encode("A B/C/D"),
+            percent_encode("e:mail.com")
         );
         assert!(
             uri.contains(&expected_label),
@@ -370,7 +387,7 @@ mod tests {
         );
 
         let reparsed = parse(&uri, timestamp()).unwrap();
-        assert_eq!(reparsed.issuer, "A B:C/D");
-        assert_eq!(reparsed.account, "e@mail.com");
+        assert_eq!(reparsed.issuer, "A B/C/D");
+        assert_eq!(reparsed.account, "e:mail.com");
     }
 }

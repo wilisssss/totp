@@ -5,6 +5,8 @@ import type { EntryView } from "../../api/types";
 import { Modal } from "../../components/ui/Modal";
 import {
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   LockIcon,
   PlusIcon,
   SearchIcon,
@@ -45,6 +47,9 @@ const SORT_MODES = Object.keys(SORT_LABELS) as SortMode[];
 
 const SORT_STORAGE_KEY = "totp.sort";
 
+/** Accounts per dashboard page — keeps the DOM small for big vaults. */
+const PER_PAGE = 10;
+
 const loadSortMode = (): SortMode => {
   const saved = window.localStorage.getItem(SORT_STORAGE_KEY);
   return saved && saved in SORT_LABELS ? (saved as SortMode) : "default";
@@ -60,6 +65,7 @@ export function MainScreen() {
   const [deleting, setDeleting] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
   const [sortOpen, setSortOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const entries = snapshot?.entries ?? [];
@@ -89,6 +95,28 @@ export function MainScreen() {
 
   // Manual reorder only makes sense in the default, unfiltered view.
   const reorderDisabled = query.trim().length > 0 || sortMode !== "default";
+
+  // Back to page 1 whenever the visible set changes shape.
+  useEffect(() => setPage(1), [query, sortMode]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PER_PAGE));
+  const safePage = Math.min(page, pageCount);
+  const paged = visible.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+
+  // Numbered buttons with ellipsis windows for long page lists.
+  const pageItems = useMemo<(number | "…")[]>(() => {
+    if (pageCount <= 7) {
+      return Array.from({ length: pageCount }, (_, index) => index + 1);
+    }
+    const items: (number | "…")[] = [1];
+    const start = Math.max(2, safePage - 1);
+    const end = Math.min(pageCount - 1, safePage + 1);
+    if (start > 2) items.push("…");
+    for (let number = start; number <= end; number += 1) items.push(number);
+    if (end < pageCount - 1) items.push("…");
+    items.push(pageCount);
+    return items;
+  }, [pageCount, safePage]);
 
   const applySort = (mode: SortMode) => {
     setSortMode(mode);
@@ -322,7 +350,7 @@ export function MainScreen() {
           // Responsive card grid: every card is capped by its column, so
           // accounts tile side by side instead of one full-width row each.
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(330px,1fr))]">
-            {visible.map((entry) => (
+            {paged.map((entry) => (
               <EntryCard
                 key={entry.id}
                 entry={entry}
@@ -336,10 +364,67 @@ export function MainScreen() {
             ))}
           </div>
         )}
+
+        {pageCount > 1 ? (
+          <nav
+            className="mt-3 flex items-center justify-center gap-1"
+            aria-label="Halaman akun"
+          >
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              disabled={safePage === 1}
+              onClick={() => setPage(safePage - 1)}
+              title="Halaman sebelumnya"
+              aria-label="Halaman sebelumnya"
+            >
+              <ChevronLeftIcon size={14} />
+            </button>
+
+            {pageItems.map((item, index) =>
+              item === "…" ? (
+                <span
+                  key={`gap-${index}`}
+                  className="px-1 text-xs text-zinc-400"
+                  aria-hidden="true"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  className={`btn !px-2.5 !py-1 !text-xs ${
+                    item === safePage ? "btn-primary" : "btn-ghost"
+                  }`}
+                  onClick={() => setPage(item)}
+                  aria-current={item === safePage ? "page" : undefined}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              disabled={safePage === pageCount}
+              onClick={() => setPage(safePage + 1)}
+              title="Halaman berikutnya"
+              aria-label="Halaman berikutnya"
+            >
+              <ChevronRightIcon size={14} />
+            </button>
+          </nav>
+        ) : null}
       </main>
 
       <footer className="flex shrink-0 items-center justify-between border-t border-zinc-200 bg-white/60 px-3 py-2 text-[13px] text-zinc-400 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-500">
-        <span>{entries.length} akun</span>
+        <span>
+          {pageCount > 1
+            ? `${(safePage - 1) * PER_PAGE + 1}–${Math.min(safePage * PER_PAGE, visible.length)} dari ${entries.length} akun`
+            : `${entries.length} akun`}
+        </span>
         <span>Kunci otomatis {formatDuration(settings?.autolock_secs ?? 0).toLowerCase()}</span>
       </footer>
 

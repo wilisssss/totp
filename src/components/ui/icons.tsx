@@ -219,3 +219,15 @@ export const RestoreIcon = (props: IconProps) => (
     <path d="M12 8v4l2.5 2.5" />
   </Svg>
 );
+
+export const ChevronLeftIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="m14 6-6 6 6 6" />
+  </Svg>
+);
+
+export const ChevronRightIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="m10 6 6 6-6 6" />
+  </Svg>
+);
