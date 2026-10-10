@@ -144,12 +144,27 @@ export function MainScreen() {
       } else if (key === "l") {
         event.preventDefault();
         void handleLock();
+      } else if (key === "arrowright" || key === "arrowleft") {
+        // Ctrl+Arrow also word-jumps inside inputs — leave that alone.
+        const target = event.target as HTMLElement | null;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+        event.preventDefault();
+        setPage(
+          key === "arrowright" ? Math.min(safePage + 1, pageCount) : Math.max(safePage - 1, 1),
+        );
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal.type, pendingDelete, lock, notify]);
+  }, [modal.type, pendingDelete, lock, notify, safePage, pageCount]);
 
   const move = async (entry: EntryView, direction: -1 | 1) => {
     const ids = entries.map((item) => item.id);
@@ -375,7 +390,7 @@ export function MainScreen() {
               className="btn btn-ghost btn-icon"
               disabled={safePage === 1}
               onClick={() => setPage(safePage - 1)}
-              title="Halaman sebelumnya"
+              title="Halaman sebelumnya (Ctrl+←)"
               aria-label="Halaman sebelumnya"
             >
               <ChevronLeftIcon size={14} />
@@ -410,7 +425,7 @@ export function MainScreen() {
               className="btn btn-ghost btn-icon"
               disabled={safePage === pageCount}
               onClick={() => setPage(safePage + 1)}
-              title="Halaman berikutnya"
+              title="Halaman berikutnya (Ctrl+→)"
               aria-label="Halaman berikutnya"
             >
               <ChevronRightIcon size={14} />

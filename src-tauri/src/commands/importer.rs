@@ -145,7 +145,9 @@ pub fn import_text(state: State<'_, AppState>, text: String) -> AppResult<Import
 #[tauri::command]
 pub fn import_qr_from_path(state: State<'_, AppState>, path: String) -> AppResult<ImportReport> {
     let bytes = std::fs::read(&path).map_err(|error| AppError::Io(format!("{path}: {error}")))?;
-    import_qr_bytes_inner(&state, &bytes)
+    let image = image::load_from_memory(&bytes)
+        .map_err(|error| AppError::Qr(format!("format gambar tidak didukung: {error}")))?;
+    import_content(&state, qr::decode::decode_dynamic(image)?)
 }
 
 /// Decode a QR code from raw base64 image data (drag & drop / paste / file
@@ -159,11 +161,47 @@ pub fn import_qr_bytes(
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(bytes_base64.trim())
         .map_err(|_| AppError::InvalidInput("data gambar base64 tidak valid".into()))?;
-    import_qr_bytes_inner(&state, &bytes)
+    let image = image::load_from_memory(&bytes)
+        .map_err(|error| AppError::Qr(format!("format gambar tidak didukung: {error}")))?;
+    import_content(&state, qr::decode::decode_dynamic(image)?)
 }
 
-fn import_qr_bytes_inner(state: &AppState, bytes: &[u8]) -> AppResult<ImportReport> {
-    let content = qr::decode::decode_image(bytes)?;
+/// Decode a QR code from raw RGBA pixels read straight out of the system
+/// clipboard (screenshots never exist as files, so there are no bytes to
+/// decode — the clipboard plugin hands us the pixel buffer instead).
+#[tauri::command]
+pub fn import_qr_rgba(
+    state: State<'_, AppState>,
+    rgba_base64: String,
+    width: u32,
+    height: u32,
+) -> AppResult<ImportReport> {
+    const MAX_SIDE: u32 = 8192;
+    if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE {
+        return Err(AppError::InvalidInput(
+            "dimensi gambar clipboard tidak valid".into(),
+        ));
+    }
+
+    let rgba = base64::engine::general_purpose::STANDARD
+        .decode(rgba_base64.trim())
+        .map_err(|_| AppError::InvalidInput("data piksel base64 tidak valid".into()))?;
+    if rgba.len() != width as usize * height as usize * 4 {
+        return Err(AppError::InvalidInput(
+            "ukuran data piksel tidak cocok dengan dimensinya".into(),
+        ));
+    }
+
+    let image = image::RgbaImage::from_raw(width, height, rgba)
+        .ok_or_else(|| AppError::InvalidInput("gambar clipboard tidak valid".into()))?;
+    import_content(
+        &state,
+        qr::decode::decode_dynamic(image::DynamicImage::ImageRgba8(image))?,
+    )
+}
+
+/// Route a decoded QR payload into the import pipeline.
+fn import_content(state: &AppState, content: String) -> AppResult<ImportReport> {
     let lower = content.to_ascii_lowercase();
 
     if lower.starts_with("otpauth-migration://") {

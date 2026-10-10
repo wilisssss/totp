@@ -32,6 +32,7 @@ const LOCKED_POLL_SECS: u64 = 30;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
@@ -92,6 +93,7 @@ pub fn run() {
             commands::importer::import_text,
             commands::importer::import_qr_from_path,
             commands::importer::import_qr_bytes,
+            commands::importer::import_qr_rgba,
             commands::backup::backup_export_encrypted,
             commands::backup::backup_import_encrypted,
             commands::settings::settings_get,

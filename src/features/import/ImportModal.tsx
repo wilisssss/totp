@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { ImportReport } from "../../api/types";
 import { Modal } from "../../components/ui/Modal";
 import { FormError } from "../../components/ui/FormError";
-import { UploadIcon } from "../../components/ui/icons";
+import { ClipboardIcon, UploadIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
+
+/** Chunked base64 — `String.fromCharCode(...bytes)` would blow the stack. */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
 
 /** Paste URIs, or drop/paste/pick a QR code image. */
 export function ImportModal({ onClose }: { onClose: () => void }) {
@@ -82,6 +93,46 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   importPathRef.current = importPath;
   const importFileRef = useRef(importFile);
   importFileRef.current = importFile;
+
+  // Screenshots live on the system clipboard as raw pixels — WebKitGTK does
+  // not expose them as DOM paste files, so read them through the clipboard
+  // plugin: image first (a QR screenshot), otherwise otpauth:// text.
+  const detectClipboard = useCallback(async () => {
+    try {
+      const image = await readImage();
+      try {
+        const { width, height } = await image.size();
+        if (width > 0 && height > 0) {
+          const rgba = await image.rgba();
+          await runImport(() => api.importQrRgba(bytesToBase64(rgba), width, height));
+          return;
+        }
+      } finally {
+        void image.close().catch(() => {});
+      }
+    } catch {
+      // No image on the clipboard — fall through to text.
+    }
+
+    try {
+      const text = (await readText()).trim();
+      if (/^otpauth(-migration)?:\/\//im.test(text)) {
+        setText(text);
+        await runImport(() => api.importText(text));
+      }
+    } catch {
+      // Clipboard empty or unreadable — nothing to import.
+    }
+  }, [runImport]);
+
+  const detectClipboardRef = useRef(detectClipboard);
+  detectClipboardRef.current = detectClipboard;
+
+  // Auto-detect once when the modal opens: if the clipboard already holds a
+  // valid QR (screenshot) or URI, import it right away.
+  useEffect(() => {
+    void detectClipboardRef.current();
+  }, []);
 
   // Native file drag & drop (the WebView swallows the DOM drop event).
   useEffect(() => {
@@ -165,6 +216,17 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
             data-selectable
           />
         </div>
+
+        <button
+          type="button"
+          onClick={() => void detectClipboard()}
+          disabled={working}
+          className="btn btn-ghost w-full"
+          title="Baca screenshot QR atau URI otpauth:// dari clipboard"
+        >
+          <ClipboardIcon size={14} />
+          {working ? "Memeriksa clipboard..." : "Tempel dari clipboard"}
+        </button>
 
         <button
           type="button"

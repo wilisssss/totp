@@ -78,6 +78,9 @@ export const api = {
   /** Base64 (no data URL prefix) of a QR image. */
   importQrBytes: (bytesBase64: string) =>
     call<ImportReport>("import_qr_bytes", { bytesBase64 }),
+  /** Raw RGBA pixels read from the system clipboard (screenshots). */
+  importQrRgba: (rgbaBase64: string, width: number, height: number) =>
+    call<ImportReport>("import_qr_rgba", { rgbaBase64, width, height }),
   exportText: () => call<string>("export_text"),
   exportBackup: () => call<string | null>("export_backup"),
   /** Passphrase-sealed backup: same envelope as the vault file. */
