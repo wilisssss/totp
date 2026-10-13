@@ -14,7 +14,8 @@ dist-ssr
 
 # Rust / Tauri
 src-tauri/target
-src-tauri/gen
+# NOTE: src-tauri/gen/android IS committed (required for Tauri mobile builds);
+# gen/schemas is regenerated on every build and stays ignored.
 *.AppImage
 *.appimage.tar.gz
 

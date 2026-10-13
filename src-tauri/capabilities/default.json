@@ -7,6 +7,10 @@
     "core:default",
     "opener:default",
     "clipboard-manager:allow-read-image",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    "dialog:default",
+    "fs:allow-read-text-file",
+    "fs:allow-read-file",
+    "fs:allow-write-text-file"
   ]
 }

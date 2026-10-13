@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
+import { Format, scan } from "@tauri-apps/plugin-barcode-scanner";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { ImportReport } from "../../api/types";
 import { Modal } from "../../components/ui/Modal";
 import { FormError } from "../../components/ui/FormError";
-import { ClipboardIcon, UploadIcon } from "../../components/ui/icons";
+import { CameraIcon, ClipboardIcon, UploadIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
+
+/** Android has no drag & drop and no desktop screenshot flow — it gets a
+    camera scanner and the SAF file picker instead. */
+const isAndroid = /android/i.test(navigator.userAgent);
 
 /** Chunked base64 — `String.fromCharCode(...bytes)` would blow the stack. */
 function bytesToBase64(bytes: Uint8Array): string {
@@ -88,6 +95,32 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     },
     [runImport],
   );
+
+  /** Android: SAF picker returns a content URI — read it via the fs plugin. */
+  const importAndroidFile = useCallback(async () => {
+    const path = await openDialog({
+      multiple: false,
+      filters: [{ name: "Gambar", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
+    });
+    if (!path) return;
+
+    await runImport(async () => {
+      const bytes = new Uint8Array(await readFile(path as string));
+      return api.importQrBytes(bytesToBase64(bytes));
+    });
+  }, [runImport]);
+
+  /** Android: scan a QR straight from the camera (ML Kit, full screen). */
+  const scanCamera = useCallback(async () => {
+    await runImport(async () => {
+      const scanned = await scan({ formats: [Format.QRCode] });
+      const content = scanned.content.trim();
+      if (!content) {
+        throw new Error("Tidak ada QR yang terbaca");
+      }
+      return api.importText(content);
+    });
+  }, [runImport]);
 
   const importPathRef = useRef(importPath);
   importPathRef.current = importPath;
@@ -217,6 +250,18 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
           />
         </div>
 
+        {isAndroid ? (
+          <button
+            type="button"
+            onClick={() => void scanCamera()}
+            disabled={working}
+            className="btn btn-primary w-full"
+            title="Buka kamera dan pindai QR code"
+          >
+            <CameraIcon size={15} /> Pindai QR dengan kamera
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={() => void detectClipboard()}
@@ -230,7 +275,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
 
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => (isAndroid ? void importAndroidFile() : fileInputRef.current?.click())}
           className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
             dragging
               ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
@@ -239,11 +284,17 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
         >
           <UploadIcon size={20} />
           <span className="text-xs font-medium">
-            {dragging ? "Lepaskan untuk mengimpor" : "Seret / paste gambar QR"}
+            {dragging
+              ? "Lepaskan untuk mengimpor"
+              : isAndroid
+                ? "Pilih gambar QR dari penyimpanan"
+                : "Seret / paste gambar QR"}
           </span>
-          <span className="text-[13px] text-zinc-400 dark:text-zinc-500">
-            atau klik untuk memilih file (png, jpeg, webp)
-          </span>
+          {isAndroid ? null : (
+            <span className="text-[13px] text-zinc-400 dark:text-zinc-500">
+              atau klik untuk memilih file (png, jpeg, webp)
+            </span>
+          )}
         </button>
 
         <input

@@ -238,3 +238,10 @@ export const ClipboardIcon = (props: IconProps) => (
     <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
   </Svg>
 );
+
+export const CameraIcon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M4 8h2.5L8 6h8l1.5 2H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+    <circle cx="12" cy="13.5" r="3.5" />
+  </Svg>
+);

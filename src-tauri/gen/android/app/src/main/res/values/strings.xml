@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">"totp"</string>
+    <string name="main_activity_title">"totp"</string>
+</resources>

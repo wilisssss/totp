@@ -74,6 +74,26 @@ makepkg -si          # build + install ke /usr/bin/totp
 Atau pasang dari rilis GitHub: unduh `totp-*.pkg.tar.zst` lalu
 `sudo pacman -U totp-*.pkg.tar.zst`.
 
+### Android (APK, arm64)
+
+Aplikasi Android dibundel di release GitHub
+(`totp-*-android-arm64.apk` — semua HP modern sudah armv8). Sideload:
+aktifkan "Install unknown apps" untuk browser/file manager, buka APK,
+selesai. Tanda tangan APK memakai keystore rilis di dalam repo — untuk
+pemakaian pribadi; jangan pakai pola ini untuk aplikasi publik.
+
+Membangun dari sumber memerlukan JDK 17, Android SDK + NDK r27
+(`NDK_HOME`), dan target Rust `aarch64-linux-android`:
+
+```bash
+rustup target add aarch64-linux-android
+npx tauri android build --target aarch64 --apk
+# hasil: src-tauri/gen/android/app/build/outputs/apk/*/release/
+```
+
+Di Android, impor QR bisa dari kamera (pindai langsung) atau gambar dari
+penyimpanan; flow clipboard image & drag-and-drop khusus desktop.
+
 ## Perintah yang berguna
 
 | Perintah              | Fungsi                                     |

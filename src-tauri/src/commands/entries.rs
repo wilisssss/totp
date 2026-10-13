@@ -8,7 +8,6 @@ use crate::otp::entry::{EntryInput, OtpEntry};
 use crate::otp::uri;
 use crate::qr;
 use crate::state::AppState;
-use crate::vault::store;
 
 fn view(entry: &OtpEntry, offset_secs: i64) -> EntryView {
     EntryView {
@@ -244,30 +243,11 @@ pub fn export_text(state: State<'_, AppState>) -> AppResult<String> {
     all_uris(&state)
 }
 
-/// Save the whole vault as a text backup through a native save dialog.
-/// Returns `None` when the user cancels.
+/// The whole vault as a text backup. The frontend picks the destination with
+/// the dialog plugin and writes it via the fs plugin — this keeps the flow
+/// identical on desktop and Android (whose pickers return content URIs that
+/// plain `std::fs` cannot handle).
 #[tauri::command]
-pub async fn export_backup(state: State<'_, AppState>) -> AppResult<Option<String>> {
-    let text = all_uris(&state)?;
-
-    let filename = format!(
-        "totp-backup-{}.txt",
-        chrono::Local::now().format("%Y%m%d-%H%M%S")
-    );
-    let saved = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new()
-            .set_file_name(&filename)
-            .add_filter("Teks", &["txt"])
-            .save_file()
-    })
-    .await
-    .map_err(|error| AppError::Internal(error.to_string()))?;
-
-    let Some(path) = saved else {
-        return Ok(None);
-    };
-
-    // The file contains every secret in plain text — owner-only permissions.
-    store::write_private(&path, text.as_bytes())?;
-    Ok(Some(path.display().to_string()))
+pub fn export_backup_content(state: State<'_, AppState>) -> AppResult<String> {
+    all_uris(&state)
 }

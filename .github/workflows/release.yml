@@ -88,12 +88,64 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  release:
-    name: Publish draft release
-    needs: [appimage, arch-package]
+  android-apk:
+    name: APK (Android)
     runs-on: ubuntu-latest
     steps:
-      - name: Collect both artifacts
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: android-arm64
+
+      # The runner ships an ANDROID_HOME, but pin the exact components so
+      # builds are reproducible (NDK r27 + platform 37, matching compileSdk).
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;27.0.12077973" "platforms;android-37" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      # Only arm64: every modern phone is armv8, and cutting the other three
+      # architectures keeps the build time (and APK size) sane.
+      - name: Build Android APK
+        run: npx tauri android build --target aarch64 --apk
+
+      - name: Rename APK
+        run: |
+          apk=$(ls src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
+          cp "$apk" "totp-${GITHUB_REF_NAME}-android-arm64.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: totp-*-android-arm64.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish draft release
+    needs: [appimage, arch-package, android-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect every artifact
         uses: actions/download-artifact@v4
         with:
           path: assets
@@ -113,7 +165,8 @@ jobs:
           draft: true
           prerelease: false
           body: >
-            Rilis otomatis: AppImage untuk Linux umum dan paket pacman
-            (.pkg.tar.zst) untuk Arch Linux. Verifikasi berkas dengan
-            SHA256SUMS.
+            Rilis otomatis: AppImage untuk Linux umum, paket pacman
+            (.pkg.tar.zst) untuk Arch Linux, dan APK Android (arm64 — semua HP
+            modern; sideload, mungkin perlu izin "install unknown apps").
+            Verifikasi berkas dengan SHA256SUMS.
           files: assets/*

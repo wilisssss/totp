@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { FormEvent, ReactNode } from "react";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { Settings, Theme } from "../../api/types";
@@ -105,10 +107,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const stamp = () => {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  };
+
   const handleBackup = async () => {
     try {
-      const path = await api.exportBackup();
-      if (path) notify("File backup tersimpan", "success");
+      const path = await saveDialog({
+        defaultPath: `totp-backup-${stamp()}.txt`,
+        filters: [{ name: "Teks", extensions: ["txt"] }],
+      });
+      if (!path) return;
+
+      const content = await api.exportBackupContent();
+      await writeTextFile(path as string, content);
+      notify("File backup tersimpan", "success");
     } catch (caught) {
       notify(errorMessage(caught), "error");
     }
@@ -144,16 +159,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
     try {
       if (encMode === "export") {
-        const path = await api.exportEncryptedBackup(encPassphrase);
+        const path = await saveDialog({
+          defaultPath: `totp-backup-${stamp()}.json`,
+          filters: [{ name: "Backup TOTP", extensions: ["json"] }],
+        });
+        if (!path) return;
+
+        const content = await api.exportEncryptedBackupContent(encPassphrase);
+        await writeTextFile(path as string, content);
         resetEncryptedForm();
-        if (path) notify("Backup terenkripsi tersimpan", "success");
+        notify("Backup terenkripsi tersimpan", "success");
       } else {
-        const report = await api.importEncryptedBackup(encPassphrase);
+        const path = await openDialog({
+          multiple: false,
+          filters: [{ name: "Backup TOTP", extensions: ["json"] }],
+        });
+        if (!path) return;
+
+        const content = await readTextFile(path as string);
+        const report = await api.importEncryptedBackupContent(content, encPassphrase);
         resetEncryptedForm();
-        if (report) {
-          await refresh();
-          notify(`${report.imported} entri dipulihkan`, "success");
-        }
+        await refresh();
+        notify(`${report.imported} entri dipulihkan`, "success");
       }
     } catch (caught) {
       setError(errorMessage(caught));

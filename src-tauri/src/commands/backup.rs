@@ -1,6 +1,10 @@
 //! Encrypted backup: the vault payload sealed with a passphrase of the
 //! user's choosing, using the same Argon2id + AES-256-GCM envelope as the
 //! vault file itself.
+//!
+//! File picking lives in the frontend (dialog + fs plugins), so these
+//! commands only handle sealed content — that keeps desktop and Android on
+//! one code path (Android pickers return content URIs, not file paths).
 
 use tauri::State;
 
@@ -9,15 +13,10 @@ use super::vault::validate_passphrase;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::crypto::{self, VaultFile};
-use crate::vault::store::{self, Payload};
+use crate::vault::store::Payload;
 
-/// File name stem for exported backups.
-const FILE_STEM: &str = "totp-backup";
-
-fn parse_backup(bytes: &[u8], passphrase: &str) -> AppResult<Vec<crate::otp::OtpEntry>> {
-    let text = String::from_utf8(bytes.to_vec())
-        .map_err(|_| AppError::Corrupt("file backup bukan teks yang valid".into()))?;
-    let vault: VaultFile = serde_json::from_str(&text)
+fn parse_backup(json: &str, passphrase: &str) -> AppResult<Vec<crate::otp::OtpEntry>> {
+    let vault: VaultFile = serde_json::from_str(json)
         .map_err(|error| AppError::Corrupt(format!("format backup tidak dikenali: {error}")))?;
 
     let key = crypto::derive_key(passphrase, &vault.salt, &vault.kdf)?;
@@ -26,21 +25,21 @@ fn parse_backup(bytes: &[u8], passphrase: &str) -> AppResult<Vec<crate::otp::Otp
     }
 
     let plaintext = crypto::decrypt(&key, &vault.nonce, &vault.ciphertext)?;
-    let json = String::from_utf8(plaintext)
+    let payload_json = String::from_utf8(plaintext)
         .map_err(|_| AppError::Corrupt("isi backup bukan UTF-8 valid".into()))?;
-    let payload: Payload = serde_json::from_str(&json)
+    let payload: Payload = serde_json::from_str(&payload_json)
         .map_err(|error| AppError::Corrupt(format!("isi backup tidak dikenali: {error}")))?;
 
     Ok(payload.entries)
 }
 
-/// Seal the current entries into an encrypted file via a native save dialog.
-/// Returns `None` when the user cancels.
+/// Seal the current entries with the given passphrase and hand the JSON
+/// envelope back to the frontend, which saves it wherever the user picks.
 #[tauri::command]
-pub async fn backup_export_encrypted(
+pub fn backup_encrypted_content(
     state: State<'_, AppState>,
     passphrase: String,
-) -> AppResult<Option<String>> {
+) -> AppResult<String> {
     validate_passphrase(&passphrase)?;
 
     let entries = state.read_entries(|entries| entries.to_vec())?;
@@ -48,62 +47,25 @@ pub async fn backup_export_encrypted(
         .map_err(|error| AppError::Internal(format!("gagal serialisasi entri: {error}")))?;
 
     let (_key, vault) = crypto::seal(&passphrase, &crypto::default_kdf(), plaintext.as_bytes())?;
-    let raw = serde_json::to_string_pretty(&vault)
-        .map_err(|error| AppError::Internal(format!("gagal serialisasi backup: {error}")))?;
-
-    let filename = format!(
-        "{FILE_STEM}-{}.json",
-        chrono::Local::now().format("%Y%m%d-%H%M%S")
-    );
-    let saved = tauri::async_runtime::spawn_blocking(move || {
-        rfd::FileDialog::new()
-            .set_file_name(&filename)
-            .add_filter("Backup TOTP (JSON)", &["json"])
-            .save_file()
-    })
-    .await
-    .map_err(|error| AppError::Internal(error.to_string()))?;
-
-    let Some(path) = saved else {
-        return Ok(None);
-    };
-
-    store::write_private(&path, raw.as_bytes())?;
-    Ok(Some(path.display().to_string()))
+    serde_json::to_string_pretty(&vault)
+        .map_err(|error| AppError::Internal(format!("gagal serialisasi backup: {error}")))
 }
 
-/// Restore entries from an encrypted backup through a native open dialog.
-/// Entries are merged (duplicates skipped); `None` means the user cancelled
-/// the dialog.
+/// Restore entries from an encrypted backup's JSON content. Entries are
+/// merged; duplicates are skipped.
 #[tauri::command]
-pub async fn backup_import_encrypted(
+pub fn backup_import_encrypted(
     state: State<'_, AppState>,
+    content: String,
     passphrase: String,
-) -> AppResult<Option<ImportReport>> {
+) -> AppResult<ImportReport> {
     validate_passphrase(&passphrase)?;
 
-    let picked = tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .add_filter("Backup TOTP (JSON)", &["json"])
-            .add_filter("Semua berkas", &["*"])
-            .pick_file()
-    })
-    .await
-    .map_err(|error| AppError::Internal(error.to_string()))?;
-
-    let Some(path) = picked else {
-        return Ok(None);
-    };
-
-    let bytes = std::fs::read(&path)
-        .map_err(|error| AppError::Io(format!("{}: {error}", path.display())))?;
-    let entries = parse_backup(&bytes, &passphrase)?;
-
+    let entries = parse_backup(&content, &passphrase)?;
     if entries.is_empty() {
         return Err(AppError::Corrupt("backup tidak berisi entri".into()));
     }
 
     let parsed = entries.into_iter().map(Ok).collect();
-    let report = merge_entries(&state, parsed)?;
-    Ok(Some(report))
+    merge_entries(&state, parsed)
 }

@@ -82,12 +82,14 @@ export const api = {
   importQrRgba: (rgbaBase64: string, width: number, height: number) =>
     call<ImportReport>("import_qr_rgba", { rgbaBase64, width, height }),
   exportText: () => call<string>("export_text"),
-  exportBackup: () => call<string | null>("export_backup"),
+  /** The whole vault as a plain-text backup; the frontend saves the file. */
+  exportBackupContent: () => call<string>("export_backup_content"),
   /** Passphrase-sealed backup: same envelope as the vault file. */
-  exportEncryptedBackup: (passphrase: string) =>
-    call<string | null>("backup_export_encrypted", { passphrase }),
-  importEncryptedBackup: (passphrase: string) =>
-    call<ImportReport | null>("backup_import_encrypted", { passphrase }),
+  exportEncryptedBackupContent: (passphrase: string) =>
+    call<string>("backup_encrypted_content", { passphrase }),
+  /** Restore from a sealed backup's JSON content (merged, dupes skipped). */
+  importEncryptedBackupContent: (content: string, passphrase: string) =>
+    call<ImportReport>("backup_import_encrypted", { content, passphrase }),
 
   // settings ------------------------------------------------------------
   getSettings: () => call<Settings>("settings_get"),

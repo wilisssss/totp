@@ -30,10 +30,19 @@ const LOCKED_POLL_SECS: u64 = 30;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init());
+
+    // Desktop-only plumbing: remembered window geometry and the system tray.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
+    builder
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let window = app.get_webview_window("main");
@@ -42,6 +51,7 @@ pub fn run() {
             state.refresh_title();
             app.manage(state);
 
+            #[cfg(desktop)]
             build_tray(app)?;
 
             // Belt and braces: close the vault after the idle timeout even if
@@ -62,14 +72,16 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|_window, _event| {
             // Optional "close to tray": hide the window instead of quitting.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.app_handle().state::<AppState>();
+            // (Desktop only — Android has no window close button.)
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                let state = _window.app_handle().state::<AppState>();
                 let close_to_tray = state.settings().map(|s| s.close_to_tray).unwrap_or(false);
                 if close_to_tray {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let _ = _window.hide();
                 }
             }
         })
@@ -89,12 +101,12 @@ pub fn run() {
             commands::entries::entry_reveal_secret,
             commands::entries::entry_qr,
             commands::entries::export_text,
-            commands::entries::export_backup,
+            commands::entries::export_backup_content,
             commands::importer::import_text,
             commands::importer::import_qr_from_path,
             commands::importer::import_qr_bytes,
             commands::importer::import_qr_rgba,
-            commands::backup::backup_export_encrypted,
+            commands::backup::backup_encrypted_content,
             commands::backup::backup_import_encrypted,
             commands::settings::settings_get,
             commands::settings::settings_set,
@@ -105,6 +117,7 @@ pub fn run() {
 }
 
 /// System tray with quick actions: reopen, lock, quit.
+#[cfg(desktop)]
 fn build_tray(app: &tauri::App) -> Result<(), tauri::Error> {
     let show = MenuItem::with_id(app, "show", "Buka TOTP", true, None::<&str>)?;
     let lock = MenuItem::with_id(app, "lock", "Kunci vault", true, None::<&str>)?;
