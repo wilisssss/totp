@@ -62,8 +62,11 @@ android {
             if (keystoreProperties.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // R8 (code shrinking/obfuscation) breaks CameraX at runtime —
+            // the camera scan crashed with an NPE in obfuscated CameraX code
+            // (see adb crash log). APK grows a few MB; correctness wins.
             optimization {
-               enable = true
+               enable = false
             }
             proguardFiles(
                 *fileTree(".") {
