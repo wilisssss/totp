@@ -3,7 +3,12 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
-import { Format, scan } from "@tauri-apps/plugin-barcode-scanner";
+import {
+  Format,
+  checkPermissions,
+  requestPermissions,
+  scan,
+} from "@tauri-apps/plugin-barcode-scanner";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { ImportReport } from "../../api/types";
@@ -110,9 +115,18 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     });
   }, [runImport]);
 
-  /** Android: scan a QR straight from the camera (ML Kit, full screen). */
+  /** Android: scan a QR straight from the camera (ML Kit, full screen).
+      The plugin throws unless the camera permission is already granted, so
+      request it first — the system dialog shows on first use. */
   const scanCamera = useCallback(async () => {
     await runImport(async () => {
+      let permission = await checkPermissions();
+      if (permission !== "granted") {
+        permission = await requestPermissions();
+      }
+      if (permission !== "granted") {
+        throw new Error("Izin kamera ditolak — aktifkan di info aplikasi");
+      }
       const scanned = await scan({ formats: [Format.QRCode] });
       const content = scanned.content.trim();
       if (!content) {

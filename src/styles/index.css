@@ -40,15 +40,15 @@
     height: 100%;
   }
 
-  /* Notched phones: keep chrome out of the camera cutout / gesture bar. */
-  @media (display-mode: standalone) {
-    header[data-tauri-drag-region] {
-      padding-top: max(10px, env(safe-area-inset-top));
-    }
+  /* Notched phones: keep chrome out of the camera cutout / gesture bar.
+     On Android the MainActivity pads the content view natively and consumes
+     the insets, so these evaluate to 0 there — desktop stays unchanged too. */
+  header[data-tauri-drag-region] {
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
 
-    footer {
-      padding-bottom: max(8px, env(safe-area-inset-bottom));
-    }
+  footer {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
   /* Native controls (select popups, spinners, dialogs) follow this hint, so the
