@@ -14,10 +14,13 @@ mod settings;
 mod state;
 mod vault;
 
+// Tray support is desktop-only; on Android these modules don't exist.
+use tauri::Manager;
+
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager,
 };
 
 use crate::state::AppState;
