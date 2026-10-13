@@ -145,6 +145,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: apk-build-log
+          path: /tmp/apk-build.log
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Rename APK
         run: |
           apk=$(ls src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk)
