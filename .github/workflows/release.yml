@@ -116,12 +116,17 @@ jobs:
           workspaces: src-tauri
           prefix-key: android-arm64
 
-      # The runner ships an ANDROID_HOME, but pin the exact components so
-      # builds are reproducible (NDK r27 + platform 37, matching compileSdk).
-      - name: Install Android NDK
+      # Runners ship a preinstalled NDK; fall back to an LTS release only if
+      # missing. The compileSdk platform is auto-installed by AGP.
+      - name: Ensure Android NDK
         run: |
-          sdkmanager --install "ndk;27.0.12077973" "platforms;android-37" > /dev/null
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          ndk=$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1 || true)
+          if [ -z "$ndk" ]; then
+            sdkmanager --install "ndk;27.2.12479018"
+            ndk="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
+          echo "Using NDK: $ndk"
 
       # Only arm64: every modern phone is armv8, and cutting the other three
       # architectures keeps the build time (and APK size) sane.
