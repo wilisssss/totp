@@ -130,8 +130,20 @@ jobs:
 
       # Only arm64: every modern phone is armv8, and cutting the other three
       # architectures keeps the build time (and APK size) sane.
+      # The log tail goes into the job summary so failures are debuggable
+      # without an authenticated API call.
       - name: Build Android APK
-        run: npx tauri android build --target aarch64 --apk
+        run: |
+          set -o pipefail
+          npx tauri android build --target aarch64 --apk 2>&1 | tee /tmp/apk-build.log
+          status=$?
+          {
+            echo "### Build log (tail)"
+            echo '```'
+            tail -60 /tmp/apk-build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Rename APK
         run: |
