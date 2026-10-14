@@ -216,7 +216,7 @@ export function MainScreen() {
     <div className="flex h-full flex-col">
       <header
         data-tauri-drag-region
-        className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80"
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80"
       >
         <div className="flex shrink-0 items-center gap-2" data-tauri-drag-region>
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">
@@ -234,14 +234,15 @@ export function MainScreen() {
           ) : null}
         </div>
 
-        <div className="relative ml-auto min-w-0 flex-1 sm:max-w-[180px]">
+        {/* Narrow screens: wraps to a second row under the icon buttons. */}
+        <div className="relative order-last min-w-0 flex-1 sm:ml-auto sm:order-none sm:max-w-[180px]">
           <SearchIcon
             size={13}
             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
           />
           <input
             ref={searchRef}
-            className="field !py-1.5 !pl-7 !text-xs"
+            className="field header-field"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Cari... (Ctrl+F)"
@@ -249,10 +250,10 @@ export function MainScreen() {
           />
         </div>
 
-        <div className="relative shrink-0">
+        <div className="relative order-last shrink-0 sm:order-none">
           <button
             type="button"
-            className="btn btn-ghost !gap-1.5 !px-2 !py-1.5 !text-xs"
+            className="btn btn-ghost header-sort"
             onClick={() => setSortOpen((open) => !open)}
             title="Urutkan akun"
             aria-label="Urutkan akun"
@@ -270,7 +271,7 @@ export function MainScreen() {
                   <button
                     key={mode}
                     type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    className="header-menu-item flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     onClick={() => applySort(mode)}
                   >
                     <span
@@ -292,7 +293,7 @@ export function MainScreen() {
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex max-sm:ml-auto shrink-0 items-center gap-1">
           <button
             type="button"
             className="btn btn-ghost btn-icon"

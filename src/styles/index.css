@@ -258,6 +258,20 @@
     border-radius: 0.55rem;
   }
 
+  /* Slim header variants of the search field and sort button — replicate the
+     compact desktop header. The coarse-pointer block below raises them to the
+     shared 42dp touch height so the whole header row lines up. */
+  .header-field {
+    padding: 0.375rem 0.5rem 0.375rem 1.75rem; /* left: room for the icon */
+    font-size: 0.75rem;
+  }
+
+  .header-sort {
+    gap: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
   /* Touch pass: fingers need bigger targets than a mouse cursor. Applies to
      phones/tablets only (pointer: coarse) — desktop look is untouched. */
   @media (pointer: coarse) {
@@ -275,6 +289,19 @@
     .field {
       padding: 0.7rem 0.85rem;
       font-size: 1rem;
+    }
+
+    .header-field {
+      min-height: 2.625rem;
+      font-size: 1rem;
+    }
+
+    .header-sort {
+      min-height: 2.625rem;
+    }
+
+    .header-menu-item {
+      min-height: 2.5rem;
     }
   }
 }
