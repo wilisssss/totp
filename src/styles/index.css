@@ -273,7 +273,7 @@
 
   /* Full-width search bar under the header row (toggled by the search icon). */
   .header-field {
-    padding: 0.45rem 0.75rem 0.45rem 1.75rem; /* left: room for the icon */
+    padding: 0.45rem 0.75rem;
     font-size: 0.875rem;
   }
 

@@ -342,10 +342,6 @@ export function MainScreen() {
 
         {searchOpen ? (
           <div className="relative min-w-0">
-            <SearchIcon
-              size={13}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
-            />
             <input
               ref={searchRef}
               className="field header-field"
