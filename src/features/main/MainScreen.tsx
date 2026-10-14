@@ -234,26 +234,24 @@ export function MainScreen() {
           ) : null}
         </div>
 
-        {/* Narrow screens: wraps to a second row under the icon buttons. */}
-        <div className="relative order-last min-w-0 flex-1 sm:ml-auto sm:order-none sm:max-w-[180px]">
+        {/* Search + sort: full row of their own on narrow screens (wraps under
+            the icon buttons); inline, capped, right-aligned from `sm:` up. */}
+        <div className="relative order-last flex w-full min-w-0 flex-1 sm:ml-auto sm:order-none sm:w-auto sm:max-w-[180px]">
           <SearchIcon
             size={13}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
+            className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-zinc-400"
           />
           <input
             ref={searchRef}
             className="field header-field"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari... (Ctrl+F)"
+            placeholder="Cari..."
             aria-label="Cari akun"
           />
-        </div>
-
-        <div className="relative order-last shrink-0 sm:order-none">
           <button
             type="button"
-            className="btn btn-ghost header-sort"
+            className="btn btn-ghost header-sort ml-1.5"
             onClick={() => setSortOpen((open) => !open)}
             title="Urutkan akun"
             aria-label="Urutkan akun"
@@ -293,7 +291,7 @@ export function MainScreen() {
           ) : null}
         </div>
 
-        <div className="flex max-sm:ml-auto shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 sm:ml-auto">
           <button
             type="button"
             className="btn btn-ghost btn-icon"

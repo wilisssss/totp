@@ -300,6 +300,7 @@
       min-width: 2.625rem;
       min-height: 2.625rem;
       padding: 0.6rem; /* same box as .btn-icon — all header buttons align */
+      flex: none;
     }
 
     .header-menu-item {
