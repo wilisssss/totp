@@ -65,6 +65,7 @@ export function MainScreen() {
   const [deleting, setDeleting] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>(loadSortMode);
   const [sortOpen, setSortOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [page, setPage] = useState(1);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -124,6 +125,14 @@ export function MainScreen() {
     setSortOpen(false);
   };
 
+  const toggleSearch = () => {
+    setSearchOpen((open) => {
+      if (open) setQuery("");
+      return !open;
+    });
+    requestAnimationFrame(() => searchRef.current?.focus());
+  };
+
   const close = () => setModal({ type: null });
 
   // Keyboard shortcuts (ignored while a modal is open):
@@ -136,8 +145,11 @@ export function MainScreen() {
       const key = event.key.toLowerCase();
       if (key === "f") {
         event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        setSearchOpen(true);
+        requestAnimationFrame(() => {
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        });
       } else if (key === "n") {
         event.preventDefault();
         setModal({ type: "add" });
@@ -216,119 +228,140 @@ export function MainScreen() {
     <div className="flex h-full flex-col">
       <header
         data-tauri-drag-region
-        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80"
+        className="flex shrink-0 flex-col gap-2 border-b border-zinc-200 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80"
       >
-        <div className="flex shrink-0 items-center gap-2" data-tauri-drag-region>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">
-            <ShieldIcon size={15} />
+        <div className="flex min-w-0 items-center gap-2" data-tauri-drag-region>
+          <div className="flex shrink-0 items-center gap-2" data-tauri-drag-region>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <ShieldIcon size={15} />
+            </div>
+            <span className="text-sm font-semibold tracking-tight">TOTP</span>
+            {offset !== 0 ? (
+              <span
+                className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                title="Koreksi jam terhadap server waktu"
+              >
+                {offset > 0 ? "+" : ""}
+                {offset}s
+              </span>
+            ) : null}
           </div>
-          <span className="text-sm font-semibold tracking-tight">TOTP</span>
-          {offset !== 0 ? (
-            <span
-              className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-              title="Koreksi jam terhadap server waktu"
-            >
-              {offset > 0 ? "+" : ""}
-              {offset}s
-            </span>
-          ) : null}
-        </div>
 
-        {/* Search + sort: full row of their own on narrow screens (wraps under
-            the icon buttons); inline, capped, right-aligned from `sm:` up. */}
-        <div className="relative order-last flex w-full min-w-0 flex-1 sm:ml-auto sm:order-none sm:w-auto sm:max-w-[180px]">
-          <SearchIcon
-            size={13}
-            className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-zinc-400"
-          />
-          <input
-            ref={searchRef}
-            className="field header-field"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari..."
-            aria-label="Cari akun"
-          />
-          <button
-            type="button"
-            className="btn btn-ghost header-sort ml-1.5"
-            onClick={() => setSortOpen((open) => !open)}
-            title="Urutkan akun"
-            aria-label="Urutkan akun"
-            aria-expanded={sortOpen}
-          >
-            <SwapIcon size={13} />
-            <span className="hidden md:inline">{SORT_LABELS[sortMode]}</span>
-          </button>
+          {/* Uniform 42dp action buttons; scrolls horizontally when the screen
+              is too narrow instead of crushing buttons. */}
+          <div className="relative ml-auto flex min-w-0 items-center">
+            <div className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => setModal({ type: "import" })}
+                title="Impor"
+                aria-label="Impor"
+              >
+                <UploadIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-icon"
+                onClick={() => setModal({ type: "add" })}
+                title="Tambah akun (Ctrl+N)"
+                aria-label="Tambah akun"
+              >
+                <PlusIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => setModal({ type: "settings" })}
+                title="Pengaturan"
+                aria-label="Pengaturan"
+              >
+                <SettingsIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={handleLock}
+                title="Kunci vault (Ctrl+L)"
+                aria-label="Kunci vault"
+              >
+                <LockIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className={`btn btn-ghost btn-icon${searchOpen ? " is-active" : ""}`}
+                onClick={toggleSearch}
+                title="Cari"
+                aria-label="Cari akun"
+                aria-expanded={searchOpen}
+              >
+                <SearchIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => setSortOpen((open) => !open)}
+                title="Urutkan akun"
+                aria-label="Urutkan akun"
+                aria-expanded={sortOpen}
+              >
+                <SwapIcon size={15} />
+              </button>
+            </div>
 
-          {sortOpen ? (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 space-y-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-                {SORT_MODES.map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className="header-menu-item flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    onClick={() => applySort(mode)}
-                  >
-                    <span
-                      className={
-                        mode === sortMode
-                          ? "font-semibold text-indigo-600 dark:text-indigo-400"
-                          : ""
-                      }
+            {sortOpen ? (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
+                <div className="absolute right-0 top-full z-50 mt-1 w-48 space-y-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+                  {SORT_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className="header-menu-item flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      onClick={() => applySort(mode)}
                     >
-                      {SORT_LABELS[mode]}
-                    </span>
-                    {mode === sortMode ? (
-                      <CheckIcon size={13} className="text-indigo-600 dark:text-indigo-400" />
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null}
+                      <span
+                        className={
+                          mode === sortMode
+                            ? "font-semibold text-indigo-600 dark:text-indigo-400"
+                            : ""
+                        }
+                      >
+                        {SORT_LABELS[mode]}
+                      </span>
+                      {mode === sortMode ? (
+                        <CheckIcon size={13} className="text-indigo-600 dark:text-indigo-400" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex max-sm:ml-auto shrink-0 items-center gap-1">
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={() => setModal({ type: "import" })}
-            title="Impor"
-            aria-label="Impor"
-          >
-            <UploadIcon size={15} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-icon"
-            onClick={() => setModal({ type: "add" })}
-            title="Tambah akun (Ctrl+N)"
-            aria-label="Tambah akun"
-          >
-            <PlusIcon size={15} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={() => setModal({ type: "settings" })}
-            title="Pengaturan"
-            aria-label="Pengaturan"
-          >
-            <SettingsIcon size={15} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={handleLock}
-            title="Kunci vault (Ctrl+L)"
-            aria-label="Kunci vault"
-          >
-            <LockIcon size={15} />
-          </button>
-        </div>
+        {searchOpen ? (
+          <div className="relative min-w-0">
+            <SearchIcon
+              size={13}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
+            />
+            <input
+              ref={searchRef}
+              className="field header-field"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setQuery("");
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder="Cari..."
+              aria-label="Cari akun"
+            />
+          </div>
+        ) : null}
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto p-3">
