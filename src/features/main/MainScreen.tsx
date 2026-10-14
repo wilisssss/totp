@@ -291,7 +291,7 @@ export function MainScreen() {
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 sm:ml-auto">
+        <div className="flex max-sm:ml-auto shrink-0 items-center gap-1">
           <button
             type="button"
             className="btn btn-ghost btn-icon"
