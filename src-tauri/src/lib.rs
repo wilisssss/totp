@@ -108,6 +108,7 @@ pub fn run() {
             commands::importer::import_text,
             commands::importer::import_qr_from_path,
             commands::importer::import_qr_bytes,
+            commands::importer::import_qr_url,
             commands::importer::import_qr_rgba,
             commands::backup::backup_encrypted_content,
             commands::backup::backup_import_encrypted,

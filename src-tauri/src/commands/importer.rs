@@ -1,5 +1,7 @@
 //! Import of `otpauth://` URIs, Google Authenticator exports and QR images.
 
+use std::time::Duration;
+
 use base64::Engine as _;
 use tauri::State;
 
@@ -166,6 +168,65 @@ pub fn import_qr_bytes(
     import_content(&state, qr::decode::decode_dynamic(image)?)
 }
 
+/// Upper bound for an image downloaded from a dragged URL (QRs are small).
+const MAX_QR_URL_BYTES: usize = 8 * 1024 * 1024;
+
+/// Download the image behind a dropped URL. The frontend cannot fetch remote
+/// images itself (the CSP keeps the webview offline), so the download happens
+/// here: http(s) only, short timeout, hard size cap.
+fn fetch_image_bytes(url: &str) -> AppResult<Vec<u8>> {
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err(AppError::InvalidInput(
+            "URL gambar harus diawali http:// atau https://".into(),
+        ));
+    }
+
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(8)))
+        .build()
+        .into();
+
+    let mut response = agent
+        .get(url)
+        .call()
+        .map_err(|error| AppError::Qr(format!("{url}: {error}")))?;
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if content_type.starts_with("text/") {
+        return Err(AppError::InvalidInput(
+            "URL tersebut adalah halaman web, bukan file gambar".into(),
+        ));
+    }
+
+    let bytes = response
+        .body_mut()
+        .with_config()
+        .limit((MAX_QR_URL_BYTES + 1) as u64)
+        .read_to_vec()
+        .map_err(|error| AppError::Qr(format!("{url}: {error}")))?;
+    if bytes.len() > MAX_QR_URL_BYTES {
+        return Err(AppError::InvalidInput(
+            "gambar terlalu besar (> 8 MB)".into(),
+        ));
+    }
+    Ok(bytes)
+}
+
+/// Decode a QR code from an image URL dragged out of a browser.
+#[tauri::command]
+pub fn import_qr_url(state: State<'_, AppState>, url: String) -> AppResult<ImportReport> {
+    let bytes = fetch_image_bytes(&url)?;
+    let image = image::load_from_memory(&bytes)
+        .map_err(|error| AppError::Qr(format!("format gambar tidak didukung: {error}")))?;
+    import_content(&state, qr::decode::decode_dynamic(image)?)
+}
+
 /// Decode a QR code from raw RGBA pixels read straight out of the system
 /// clipboard (screenshots never exist as files, so there are no bytes to
 /// decode — the clipboard plugin hands us the pixel buffer instead).
@@ -215,4 +276,29 @@ fn import_content(state: &AppState, content: String) -> AppResult<ImportReport> 
     }
 
     import_uris(state, &[content])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fetch_image_bytes, MAX_QR_URL_BYTES};
+
+    #[test]
+    fn fetch_image_bytes_rejects_non_http_urls() {
+        for url in [
+            "data:image/png;base64,iVBORw0KGgo=",
+            "file:///etc/passwd",
+            "ftp://contoh.id/qr.png",
+            "blob:https://contoh.id/uuid",
+            "",
+            "https:/tanpa-slash",
+        ] {
+            assert!(fetch_image_bytes(url).is_err(), "URL `{url}` harus ditolak",);
+        }
+    }
+
+    #[test]
+    fn url_size_cap_is_sane() {
+        let cap = MAX_QR_URL_BYTES;
+        assert!((1024 * 1024..=16 * 1024 * 1024).contains(&cap));
+    }
 }

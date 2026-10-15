@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { readImage, readText } from "@tauri-apps/plugin-clipboard-manager";
@@ -17,6 +16,8 @@ import { FormError } from "../../components/ui/FormError";
 import { CameraIcon, ClipboardIcon, UploadIcon } from "../../components/ui/icons";
 import { useToast } from "../../components/ui/Toast";
 import { useVault } from "../vault/VaultProvider";
+import { importDropPayload, useQrDropZone, type DropPayload } from "./useQrDrop";
+import { readFileAsBase64 } from "../../lib/qr-drop";
 
 /** Android has no drag & drop and no desktop screenshot flow — it gets a
     camera scanner and the SAF file picker instead. */
@@ -40,7 +41,6 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState("");
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,26 +76,12 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     void runImport(() => api.importText(text));
   }, [runImport, text]);
 
-  const importPath = useCallback(
-    (path: string) => {
-      void runImport(() => api.importQrFromPath(path));
-    },
-    [runImport],
-  );
-
   const importFile = useCallback(
     (file: File) => {
       void (async () => {
-        // Base64 keeps large images cheap over the IPC bridge (a JSON number
-        // array would be ~5× larger than the file itself).
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error("Gagal membaca file gambar"));
-          reader.readAsDataURL(file);
-        });
-        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-        await runImport(() => api.importQrBytes(base64));
+        await runImport(() =>
+          readFileAsBase64(file).then((base64) => api.importQrBytes(base64)),
+        );
       })();
     },
     [runImport],
@@ -135,11 +121,6 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
       return api.importText(content);
     });
   }, [runImport]);
-
-  const importPathRef = useRef(importPath);
-  importPathRef.current = importPath;
-  const importFileRef = useRef(importFile);
-  importFileRef.current = importFile;
 
   // Screenshots live on the system clipboard as raw pixels — WebKitGTK does
   // not expose them as DOM paste files, so read them through the clipboard
@@ -181,38 +162,20 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     void detectClipboardRef.current();
   }, []);
 
-  // Native file drag & drop (the WebView swallows the DOM drop event).
-  useEffect(() => {
-    let dispose: (() => void) | undefined;
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const listener = await getCurrentWebview().onDragDropEvent((event) => {
-          const payload = event.payload as { type?: string; paths?: string[] };
-          if (payload.type === "enter") setDragging(true);
-          else if (payload.type === "leave") setDragging(false);
-          else if (payload.type === "drop") {
-            setDragging(false);
-            const path = payload.paths?.[0];
-            if (path) importPathRef.current(path);
-          }
-        });
-
-        if (cancelled) listener();
-        else dispose = listener;
-      } catch (caught) {
-        console.warn("drag & drop native tidak tersedia", caught);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      dispose?.();
-    };
-  }, []);
+  /** HTML5 drop zone: browser images arrive as data URLs / image files, not
+      as filesystem paths, so the DOM event is parsed by hand. */
+  const handleDropPayload = useCallback(
+    (payload: DropPayload) => {
+      void runImport(() => importDropPayload(payload));
+    },
+    [runImport],
+  );
+  const dropZone = useQrDropZone(handleDropPayload);
 
   // Ctrl+V with an image in the clipboard imports it directly.
+  const importFileRef = useRef(importFile);
+  importFileRef.current = importFile;
+
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
       const file = event.clipboardData?.files?.[0];
@@ -289,16 +252,19 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
 
         <button
           type="button"
+          onDragOver={dropZone.onDragOver}
+          onDragLeave={dropZone.onDragLeave}
+          onDrop={dropZone.onDrop}
           onClick={() => (isAndroid ? void importAndroidFile() : fileInputRef.current?.click())}
           className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
-            dragging
+            dropZone.dragging
               ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
               : "border-zinc-300 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-300"
           }`}
         >
           <UploadIcon size={20} />
           <span className="text-xs font-medium">
-            {dragging
+            {dropZone.dragging
               ? "Lepaskan untuk mengimpor"
               : isAndroid
                 ? "Pilih gambar QR dari penyimpanan"

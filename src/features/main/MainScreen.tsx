@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
 import type { EntryView } from "../../api/types";
@@ -21,6 +21,8 @@ import { formatDuration, matchesQuery } from "../../lib/format";
 import { EntryCard } from "../entries/EntryCard";
 import { EntryFormModal } from "../entries/EntryFormModal";
 import { ImportModal } from "../import/ImportModal";
+import { importDropPayload, useQrDropWindow } from "../import/useQrDrop";
+import type { DropPayload } from "../import/useQrDrop";
 import { QrModal } from "../qr/QrModal";
 import { SettingsModal } from "../settings/SettingsModal";
 import { useVault } from "../vault/VaultProvider";
@@ -68,6 +70,33 @@ export function MainScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [page, setPage] = useState(1);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  /** Drop a QR anywhere on the dashboard — no need to open Import first. */
+  const [dropWorking, setDropWorking] = useState(false);
+  const handleDashboardDrop = useCallback(
+    async (payload: DropPayload) => {
+      setDropWorking(true);
+      try {
+        const report = await importDropPayload(payload);
+        await refresh();
+        if (report.imported > 0) {
+          notify(`${report.imported} entri diimpor`, "success");
+        }
+        if (report.failed > 0 || report.skipped > 0) {
+          notify(`${report.failed} gagal, ${report.skipped} dilewati (duplikat)`, "error");
+        }
+      } catch (caught) {
+        notify(errorMessage(caught), "error");
+      } finally {
+        setDropWorking(false);
+      }
+    },
+    [notify, refresh],
+  );
+  const dashboardDrop = useQrDropWindow(
+    (payload) => void handleDashboardDrop(payload),
+    modal.type === null && !dropWorking,
+  );
 
   const entries = snapshot?.entries ?? [];
   const visible = useMemo(() => {
@@ -476,6 +505,17 @@ export function MainScreen() {
       {modal.type === "import" ? <ImportModal onClose={close} /> : null}
       {modal.type === "settings" ? <SettingsModal onClose={close} /> : null}
       {modal.type === "qr" ? <QrModal entry={modal.entry} onClose={close} /> : null}
+
+      {dashboardDrop.dragging ? (
+        <div
+          className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-dashed border-indigo-500 bg-indigo-50/85 backdrop-blur-[1px] dark:bg-indigo-950/70"
+          aria-hidden="true"
+        >
+          <p className="rounded-xl bg-white/90 px-4 py-2 text-sm font-semibold text-indigo-700 shadow dark:bg-zinc-900/90 dark:text-indigo-200">
+            Lepaskan QR code untuk mengimpor
+          </p>
+        </div>
+      ) : null}
 
       {pendingDelete ? (
         <Modal

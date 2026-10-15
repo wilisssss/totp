@@ -78,6 +78,8 @@ export const api = {
   /** Base64 (no data URL prefix) of a QR image. */
   importQrBytes: (bytesBase64: string) =>
     call<ImportReport>("import_qr_bytes", { bytesBase64 }),
+  /** Download and decode a QR image dragged out of a browser by URL. */
+  importQrUrl: (url: string) => call<ImportReport>("import_qr_url", { url }),
   /** Raw RGBA pixels read from the system clipboard (screenshots). */
   importQrRgba: (rgbaBase64: string, width: number, height: number) =>
     call<ImportReport>("import_qr_rgba", { rgbaBase64, width, height }),
