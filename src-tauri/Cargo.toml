@@ -1,6 +1,6 @@
 [package]
 name = "totp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Simple TOTP / 2FA authenticator"
 authors = ["wilisssss <317244304+wilisssss@users.noreply.github.com>"]
 edition = "2021"

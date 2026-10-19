@@ -1,7 +1,7 @@
 # Maintainer: wilisssss <317244304+wilisssss@users.noreply.github.com>
 
 pkgname=totp
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Simple, offline TOTP / 2FA authenticator with an encrypted vault"
 arch=('x86_64')
