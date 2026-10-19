@@ -167,7 +167,10 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
                             }
                             val plaintext = authenticated.doFinal(decode(stored))
                             val reply = JSObject()
-                            reply.put("secret", String(plaintext, Charsets.UTF_8))
+                            // Base64 again: the plaintext is 32 raw bytes and is
+                            // NOT valid UTF-8, so a direct String() copy mangles
+                            // it (rustc then fails to decode the result).
+                            reply.put("secret", encode(plaintext))
                             plaintext.fill(0)
                             target.resolve(reply)
                         }
