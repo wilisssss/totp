@@ -1,6 +1,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 
 import type {
+  BiometricStatus,
   ClockSync,
   CommandErrorPayload,
   EntryInput,
@@ -59,6 +60,12 @@ export const api = {
       oldPassphrase,
       newPassphrase,
     }),
+
+  // biometrics (Android only; desktop reports unavailable) --------------
+  biometricStatus: () => call<BiometricStatus>("biometric_status"),
+  biometricEnroll: () => call<BiometricStatus>("biometric_enroll"),
+  biometricUnlock: () => call<Snapshot>("biometric_unlock"),
+  biometricDisable: () => call<void>("biometric_disable"),
 
   // entries -------------------------------------------------------------
   snapshot: () => call<Snapshot>("snapshot"),

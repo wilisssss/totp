@@ -14,6 +14,9 @@ mod settings;
 mod state;
 mod vault;
 
+#[cfg(target_os = "android")]
+mod biometric;
+
 // Tray support is desktop-only; on Android these modules don't exist.
 use tauri::Manager;
 
@@ -44,6 +47,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(biometric::init());
 
     builder
         .setup(|app| {
@@ -94,6 +99,10 @@ pub fn run() {
             commands::vault::vault_unlock,
             commands::vault::vault_lock,
             commands::vault::vault_change_passphrase,
+            commands::biometric::biometric_status,
+            commands::biometric::biometric_enroll,
+            commands::biometric::biometric_unlock,
+            commands::biometric::biometric_disable,
             commands::entries::snapshot,
             commands::entries::entry_create,
             commands::entries::entry_update,

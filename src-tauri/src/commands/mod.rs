@@ -1,6 +1,7 @@
 //! Tauri command surface. Everything the frontend can call lives here.
 
 pub mod backup;
+pub mod biometric;
 pub mod entries;
 pub mod importer;
 pub mod settings;

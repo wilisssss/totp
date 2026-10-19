@@ -6,7 +6,7 @@ use crate::commands::entries::build_snapshot;
 use crate::commands::Snapshot;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use crate::vault::crypto::{self, default_kdf};
+use crate::vault::crypto::{self, default_kdf, MasterKey};
 use crate::vault::store::Payload;
 
 /// Minimum passphrase length accepted at creation time.
@@ -85,6 +85,25 @@ pub fn vault_unlock(state: State<'_, AppState>, passphrase: String) -> AppResult
     state.unlock(key, vault, payload.entries)?;
 
     build_snapshot(&state)
+}
+
+/// Unlock with an already-derived master key (biometric path).
+///
+/// The key still has to pass the vault verifier: after a passphrase change
+/// the sealed key from the keystore is stale and must be rejected instead of
+/// silently decrypting nothing.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn unlock_with_key(state: &AppState, key: MasterKey) -> AppResult<Snapshot> {
+    let vault = load_vault(state)?;
+
+    if !crypto::check_verifier(&key, &vault)? {
+        return Err(AppError::WrongPassphrase);
+    }
+
+    let payload = decrypt_payload(&key, &vault)?;
+    state.unlock(key, vault, payload.entries)?;
+
+    build_snapshot(state)
 }
 
 #[tauri::command]

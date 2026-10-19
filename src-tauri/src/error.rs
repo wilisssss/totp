@@ -31,6 +31,20 @@ pub enum AppError {
     Io(String),
     #[error("Data vault rusak: {0}")]
     Corrupt(String),
+    #[error("Perangkat ini tidak mendukung sidik jari")]
+    BiometricUnavailable,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    #[error("Sidik jari belum diaktifkan untuk vault ini")]
+    BiometricNotEnrolled,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    #[error("Sidik jari berubah — aktifkan ulang di Pengaturan")]
+    BiometricInvalidated,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    #[error("Dibatalkan")]
+    BiometricCancelled,
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    #[error("{0}")]
+    BiometricFailed(String),
     #[error("{0}")]
     Internal(String),
 }
@@ -49,6 +63,11 @@ impl AppError {
             Self::ClockSync(_) => "clock_sync",
             Self::Io(_) => "io",
             Self::Corrupt(_) => "corrupt",
+            Self::BiometricUnavailable => "biometric_unavailable",
+            Self::BiometricNotEnrolled => "biometric_not_enrolled",
+            Self::BiometricInvalidated => "biometric_invalidated",
+            Self::BiometricCancelled => "biometric_cancelled",
+            Self::BiometricFailed(_) => "biometric_failed",
             Self::Internal(_) => "internal",
         }
     }

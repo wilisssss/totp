@@ -38,6 +38,12 @@ export interface VaultStatus {
   locked: boolean;
 }
 
+/** Fingerprint unlock availability (Android only; desktop reports false). */
+export interface BiometricStatus {
+  available: boolean;
+  enrolled: boolean;
+}
+
 export interface EntryInput {
   issuer: string;
   account: string;

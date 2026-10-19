@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
-import { api, errorMessage } from "../../api/tauri";
+import { api, CommandError, errorMessage } from "../../api/tauri";
 import type { Settings, Theme } from "../../api/types";
 import { copyText } from "../../lib/clipboard";
 import { formatDuration } from "../../lib/format";
@@ -14,6 +14,7 @@ import {
   CopyIcon,
   DownloadIcon,
   EyeIcon,
+  FingerprintIcon,
   KeyIcon,
   RefreshIcon,
   RestoreIcon,
@@ -25,7 +26,18 @@ import { useVault } from "../vault/VaultProvider";
 const AUTOLOCK_CHOICES = [0, 60, 300, 900, 3600];
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, saveSettings, syncClock, changePassphrase, refresh, busy } = useVault();
+  const {
+    settings,
+    saveSettings,
+    syncClock,
+    changePassphrase,
+    refresh,
+    busy,
+    biometric,
+    biometricBusy,
+    enableBiometric,
+    disableBiometric,
+  } = useVault();
   const notify = useToast();
 
   const [changingPassphrase, setChangingPassphrase] = useState(false);
@@ -46,6 +58,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     try {
       await saveSettings({ ...settings, [key]: value });
     } catch (caught) {
+      notify(errorMessage(caught), "error");
+    }
+  };
+
+  const toggleBiometric = async (enable: boolean) => {
+    try {
+      if (enable) {
+        await enableBiometric();
+        notify("Sidik jari diaktifkan untuk vault ini", "success");
+      } else {
+        await disableBiometric();
+        notify("Sidik jari dinonaktifkan", "info");
+      }
+    } catch (caught) {
+      if (caught instanceof CommandError && caught.code === "biometric_cancelled") {
+        // Closing the system prompt is normal; flip the checkbox back.
+        notify("Aktivasi sidik jari dibatalkan", "info");
+        return;
+      }
       notify(errorMessage(caught), "error");
     }
   };
@@ -84,7 +115,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
     try {
       await changePassphrase(oldPassphrase, newPassphrase);
-      notify("Passphrase berhasil diganti", "success");
+
+      // The sealed fingerprint key matches the OLD passphrase, so the next
+      // biometric unlock would fail the vault verifier. Drop it up front.
+      if (biometric.enrolled) {
+        try {
+          await disableBiometric();
+        } catch {
+          // Keystore cleanup is best-effort; the passphrase still works.
+        }
+      }
+
+      notify(
+        biometric.enrolled
+          ? "Passphrase diganti — aktifkan ulang sidik jari"
+          : "Passphrase berhasil diganti",
+        "success",
+      );
       setChangingPassphrase(false);
       setOldPassphrase("");
       setNewPassphrase("");
@@ -247,6 +294,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             checked={settings.close_to_tray}
             onChange={(value) => void updateSetting("close_to_tray", value)}
           />
+
+          {biometric.available ? (
+            <SettingToggle
+              icon={<FingerprintIcon size={14} />}
+              label="Buka dengan sidik jari"
+              hint={
+                biometric.enrolled
+                  ? "Vault terbuka via sidik jari tanpa passphrase"
+                  : "Aktifkan — sidik jari Android akan diminta"
+              }
+              checked={biometric.enrolled}
+              disabled={biometricBusy}
+              onChange={(value) => void toggleBiometric(value)}
+            />
+          ) : null}
 
           {!changingPassphrase ? (
             <button
@@ -432,12 +494,17 @@ interface SettingToggleProps {
   label: string;
   hint: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 }
 
-function SettingToggle({ icon, label, hint, checked, onChange }: SettingToggleProps) {
+function SettingToggle({ icon, label, hint, checked, disabled, onChange }: SettingToggleProps) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2.5 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700">
+    <label
+      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 px-3 py-2.5 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700${
+        disabled ? " pointer-events-none opacity-50" : ""
+      }`}
+    >
       <span className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         {icon}
         <span>
@@ -449,6 +516,7 @@ function SettingToggle({ icon, label, hint, checked, onChange }: SettingTogglePr
         type="checkbox"
         className="h-4 w-4 shrink-0 accent-indigo-600"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
     </label>

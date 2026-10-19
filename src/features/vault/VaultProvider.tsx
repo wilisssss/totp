@@ -10,7 +10,7 @@ import {
 import type { ReactNode } from "react";
 
 import { api, errorMessage } from "../../api/tauri";
-import type { Settings, Snapshot, Theme } from "../../api/types";
+import type { BiometricStatus, Settings, Snapshot, Theme } from "../../api/types";
 
 export type Phase = "loading" | "setup" | "locked" | "ready";
 
@@ -25,6 +25,8 @@ export interface TickState {
 }
 
 const NO_TICK: TickState = { now: 0, snapshotAt: 0 };
+
+const NO_BIOMETRIC: BiometricStatus = { available: false, enrolled: false };
 
 const TickContext = createContext<TickState>(NO_TICK);
 
@@ -52,6 +54,16 @@ interface VaultContextValue {
   changePassphrase: (oldPassphrase: string, newPassphrase: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
   syncClock: () => Promise<{ offsetSecs: number; corrected: boolean }>;
+  /** Fingerprint support for the current device + whether this vault uses it. */
+  biometric: BiometricStatus;
+  /** True while the system fingerprint prompt is open. */
+  biometricBusy: boolean;
+  /** Seal the master key behind the fingerprint (vault must be unlocked). */
+  enableBiometric: () => Promise<void>;
+  /** Forget the sealed key; the passphrase keeps working as before. */
+  disableBiometric: () => Promise<void>;
+  /** Fingerprint prompt → unlock without typing the passphrase. */
+  unlockWithBiometric: () => Promise<void>;
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -80,6 +92,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState<TickState>(NO_TICK);
+  const [biometric, setBiometric] = useState<BiometricStatus>(NO_BIOMETRIC);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   // Latest snapshot + when it was adopted, readable from the ticker without
   // re-subscribing the interval on every snapshot change.
@@ -112,6 +126,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setSettings(current);
         applyTheme(current.theme);
+
+        // Fingerprint support is Android-only; failure just hides the button.
+        try {
+          const bio = await api.biometricStatus();
+          if (!cancelled) setBiometric(bio);
+        } catch {
+          // Desktop builds report unavailable, no need to surface an error.
+        }
 
         const status = await api.status();
         if (cancelled) return;
@@ -246,6 +268,29 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     };
   }, [run, refresh]);
 
+  // Fingerprint flows (Android only; desktop always reports unavailable, so
+  // these callbacks are dead code there and never invoked by the UI).
+  const enableBiometric = useCallback(async () => {
+    const status = await run(() => api.biometricEnroll());
+    setBiometric((current) => ({ ...current, enrolled: status.enrolled }));
+  }, [run]);
+
+  const disableBiometric = useCallback(async () => {
+    await run(() => api.biometricDisable());
+    setBiometric((current) => ({ ...current, enrolled: false }));
+  }, [run]);
+
+  const unlockWithBiometric = useCallback(async () => {
+    // `busy` drives the passphrase button; the system prompt opens on top of
+    // it, so it gets its own flag. Errors are surfaced by the caller.
+    setBiometricBusy(true);
+    try {
+      adoptSnapshot(await api.biometricUnlock());
+    } finally {
+      setBiometricBusy(false);
+    }
+  }, [adoptSnapshot]);
+
   const value = useMemo<VaultContextValue>(
     () => ({
       phase,
@@ -261,6 +306,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       changePassphrase,
       saveSettings,
       syncClock,
+      biometric,
+      biometricBusy,
+      enableBiometric,
+      disableBiometric,
+      unlockWithBiometric,
     }),
     [
       phase,
@@ -275,6 +325,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       changePassphrase,
       saveSettings,
       syncClock,
+      biometric,
+      biometricBusy,
+      enableBiometric,
+      disableBiometric,
+      unlockWithBiometric,
     ],
   );
 

@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use tauri::WebviewWindow;
+use zeroize::Zeroizing;
 
 use crate::error::{AppError, AppResult};
 use crate::otp::OtpEntry;
@@ -165,6 +166,14 @@ impl AppState {
         inner.last_activity = Instant::now();
         let entries = inner.entries.as_ref().ok_or(AppError::Locked)?;
         Ok(f(entries))
+    }
+
+    /// Copy of the master key, for sealing it behind the device biometrics.
+    /// Requires an unlocked vault.
+    pub fn master_key(&self) -> AppResult<MasterKey> {
+        let inner = self.guard()?;
+        let key = inner.key.as_ref().ok_or(AppError::Locked)?;
+        Ok(Zeroizing::new(**key))
     }
 
     /// Write access: runs `f`, then re-encrypts and persists the vault.
